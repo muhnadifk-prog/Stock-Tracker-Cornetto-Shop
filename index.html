@@ -1437,8 +1437,9 @@ function onClick(e){
     case 'remove-condition': removeCondition(name); break;
     case 'reset-conditions': uiConfirm('Reset kondisi ke default?',function(){ state.conditions=DEFAULT_CONDITIONS.slice(); persist(); render(); }); break;
     case 'sb-save-config': {
-      var u=(val('sbUrl')||'').replace(/\/+$/,''); var k=val('sbKey');
+      var u=normalizeSbUrl(val('sbUrl')); var k=(val('sbKey')||'').trim();
       if(!u || !k){ renderConfigScreen('URL dan anon key wajib diisi.'); break; }
+      if(u.indexOf('.supabase.co')===-1){ renderConfigScreen('Project URL sepertinya salah. Harus berbentuk https://xxxx.supabase.co — ambil dari Supabase: Project Settings \u2192 API \u2192 Project URL (bukan alamat halaman dashboard).'); break; }
       try{ localStorage.setItem('sb_url',u); localStorage.setItem('sb_key',k); localStorage.removeItem('sb_skip'); }catch(e){}
       sb=null; boot(); break;
     }
@@ -1450,8 +1451,8 @@ function onClick(e){
       var em=val('sbEmail'), pw=val('sbPw');
       if(!em||!pw){ renderLoginScreen('Email & password wajib diisi.'); break; }
       renderLoadingScreen('Masuk…');
-      sbSignIn(em,pw).then(function(res){ if(res.error){ renderLoginScreen(res.error.message); return; } enterCloud(); })
-        .catch(function(e){ renderLoginScreen((e&&e.message)||'Gagal masuk.'); });
+      sbSignIn(em,pw).then(function(res){ if(res.error){ renderLoginScreen(authErrHint(res.error.message)); return; } enterCloud(); })
+        .catch(function(e){ renderLoginScreen(authErrHint((e&&e.message)||'Gagal masuk.')); });
       break;
     }
     case 'sb-signup': {
@@ -1460,10 +1461,10 @@ function onClick(e){
       if(pw2.length<6){ renderLoginScreen('Password minimal 6 karakter.'); break; }
       renderLoadingScreen('Mendaftar…');
       sbSignUp(em2,pw2).then(function(res){
-        if(res.error){ renderLoginScreen(res.error.message); return; }
+        if(res.error){ renderLoginScreen(authErrHint(res.error.message)); return; }
         if(res.data && res.data.session){ enterCloud(); }
         else { renderLoginScreen(null,'Akun dibuat. Cek email untuk konfirmasi bila diminta, lalu Masuk. (Bisa matikan konfirmasi email di Supabase → Authentication → Providers → Email.)'); }
-      }).catch(function(e){ renderLoginScreen((e&&e.message)||'Gagal daftar.'); });
+      }).catch(function(e){ renderLoginScreen(authErrHint((e&&e.message)||'Gagal daftar.')); });
       break;
     }
     case 'sb-sync': cloudSyncNow(); break;
@@ -1590,6 +1591,16 @@ function getSbKey(){ try{ return SUPABASE_ANON_KEY || localStorage.getItem('sb_k
 function getSbSkip(){ try{ return localStorage.getItem('sb_skip')==='1'; }catch(e){ return false; } }
 function setSbSkip(v){ try{ if(v) localStorage.setItem('sb_skip','1'); else localStorage.removeItem('sb_skip'); }catch(e){} }
 
+function normalizeSbUrl(raw){
+  var u=(raw||'').trim();
+  if(!u) return '';
+  var m=u.match(/supabase\.com\/dashboard\/project\/([a-z0-9]+)/i);
+  if(m) return 'https://'+m[1]+'.supabase.co';
+  if(!/^https?:\/\//i.test(u)) u='https://'+u;
+  var parts=u.split('/');
+  if(parts.length>=3 && parts[2]) return parts[0]+'//'+parts[2];
+  return u.replace(/\/+$/,'');
+}
 function initSb(){
   var url=getSbUrl(), key=getSbKey();
   if(!url || !key) return false;
@@ -1649,6 +1660,12 @@ function cloudBadgeInner(){
 }
 function sbSignIn(email,pw){ return sb.auth.signInWithPassword({email:email,password:pw}); }
 function sbSignUp(email,pw){ return sb.auth.signUp({email:email,password:pw}); }
+function authErrHint(m){
+  m=m||'Gagal.';
+  if(/invalid path|failed to fetch|networkerror|load failed|to fetch|invalid url|not found/i.test(m))
+    m+=' — kemungkinan Project URL / anon key salah. Klik "Ganti koneksi Supabase" lalu salin ulang dari Supabase: Project Settings → API.';
+  return m;
+}
 
 function renderGate(inner){
   try{ document.getElementById('nav').innerHTML=''; }catch(e){}
@@ -1670,7 +1687,7 @@ function renderConfigScreen(err){
   renderGate(
     '<div class="card">'
     + '<h2 class="display" style="font-size:22px;margin:0 0 6px">Hubungkan ke Supabase</h2>'
-    + '<p class="note" style="margin:0 0 16px">Agar data & invoice tersimpan di cloud dan bisa dibuka di HP/laptop mana pun. Ambil dari dashboard Supabase: <strong style="color:var(--ink)">Project Settings \u2192 API</strong>.</p>'
+    + '<p class="note" style="margin:0 0 16px">Agar data & invoice tersimpan di cloud dan bisa dibuka di HP/laptop mana pun. Ambil dari Supabase: <strong style="color:var(--ink)">Project Settings \u2192 API</strong>. Project URL harus berbentuk <strong style="color:var(--ink)">https://xxxx.supabase.co</strong> (bukan alamat halaman dashboard).</p>'
     + (err?'<div class="alert danger" style="margin:0 0 12px">'+esc(err)+'</div>':'')
     + '<label class="fld" style="margin-bottom:10px"><span>Project URL</span><input id="sbUrl" type="text" placeholder="https://xxxx.supabase.co" value="'+esc(getSbUrl())+'"></label>'
     + '<label class="fld" style="margin-bottom:14px"><span>anon public key</span><input id="sbKey" type="text" placeholder="eyJhbGciOi..." value="'+esc(getSbKey())+'"></label>'
@@ -1684,7 +1701,7 @@ function renderLoginScreen(err,info){
   renderGate(
     '<div class="card">'
     + '<h2 class="display" style="font-size:22px;margin:0 0 6px">Masuk</h2>'
-    + '<p class="note" style="margin:0 0 16px">Login agar hanya kamu yang bisa mengakses data ini.</p>'
+    + '<p class="note" style="margin:0 0 16px">Ini <strong style="color:var(--ink)">akun baru khusus aplikasi ini</strong> (bukan akun login supabase.com). Pertama kali? Klik <strong style="color:var(--ink)">Daftar akun baru</strong> dulu, lalu Masuk.</p>'
     + (err?'<div class="alert danger" style="margin:0 0 12px">'+esc(err)+'</div>':'')
     + (info?'<div class="alert profit" style="margin:0 0 12px">'+esc(info)+'</div>':'')
     + '<label class="fld" style="margin-bottom:10px"><span>Email</span><input id="sbEmail" type="email" placeholder="kamu@email.com"></label>'
