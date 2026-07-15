@@ -145,6 +145,65 @@
   .sec.g2 .card{ flex:1; }
   .cloud-badge{ font-size:11px; color:var(--muted); display:inline-flex; align-items:center; gap:5px; }
   .cloud-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .order-tag{ display:inline-block; font-size:10px; font-weight:600; color:var(--primary); background:rgba(30,27,75,.08); border-radius:6px; padding:1px 6px; margin-left:6px; white-space:nowrap; }
+  .list-summary{ font-size:12.5px; color:var(--muted); background:var(--paper); border:1px solid var(--rule); border-radius:6px; padding:8px 12px; margin-bottom:10px; line-height:1.6; }
+  .sort-mobile{ display:none; }
+
+  @media (max-width: 767px){
+    .wrap{ padding:0 14px; }
+    main{ padding:16px 0; }
+    .sec{ margin-bottom:22px; }
+
+    .hd-in{ padding:14px 0; gap:10px; align-items:flex-start; }
+    .hd h1{ font-size:25px; }
+    .eyebrow{ font-size:9px; }
+
+    .nav{ background:var(--paper); }
+    .tab{ padding:11px 13px; font-size:13px; }
+
+    .kpis{ grid-template-columns:1fr 1fr; gap:8px; }
+    .kpi{ padding:12px; border-radius:10px; }
+    .kpi .val{ font-size:1.35rem; }
+    .kpi .lab{ font-size:9px; }
+
+    .sec-hd{ gap:8px; }
+    .sec-title{ font-size:10px; }
+
+    .card{ padding:14px; border-radius:12px; }
+    .card.tight{ padding:12px; }
+    .form-grid{ gap:10px; }
+    .actions{ gap:8px; }
+    .actions .btn{ flex:1; text-align:center; }
+
+    .toolbar{ width:100%; gap:8px; }
+    .toolbar .search{ flex:1 1 100%; width:100%; max-width:none; }
+    .toolbar select{ flex:1 1 46%; width:auto; padding:9px 12px; }
+    .toolbar .chk{ flex:1 1 100%; }
+    .sort-mobile{ display:inline-block !important; flex:1 1 100%; width:100%; }
+
+    .list-summary{ font-size:12px; padding:9px 11px; }
+    .segbtn{ padding:6px 11px; font-size:11.5px; }
+    .modal{ max-width:100%; }
+
+    /* Ubah tabel data besar menjadi kartu */
+    .data-wrap{ border:0; overflow:visible; background:transparent; border-radius:0; }
+    .data-wrap table{ min-width:0 !important; }
+    .data-wrap thead{ display:none; }
+    .data-wrap tbody, .data-wrap tr, .data-wrap td{ display:block; width:auto; }
+    .data-wrap tbody tr{ display:flex; flex-direction:column; border:1px solid var(--rule); border-radius:14px; background:var(--card); margin-bottom:10px; padding:12px 15px; box-shadow:0 1px 2px rgba(19,20,24,.03); }
+    .data-wrap tbody tr:hover{ background:var(--card); }
+    .data-wrap td{ border:0 !important; padding:5px 0; display:flex; justify-content:space-between; gap:14px; align-items:baseline; font-size:13px; }
+    .data-wrap td::before{ content:attr(data-label); color:var(--muted); font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; flex:0 0 auto; }
+    .data-wrap td:nth-child(2){ order:-2; display:block; padding:0 0 9px; margin-bottom:7px; border-bottom:1px solid var(--rule) !important; font-size:14.5px; line-height:1.35; }
+    .data-wrap td:nth-child(2)::before{ display:none; }
+    .data-wrap td:last-child{ order:100; display:flex; justify-content:flex-end; gap:18px; padding-top:11px; margin-top:5px; border-top:1px solid var(--rule) !important; }
+    .data-wrap td:last-child::before{ display:none; }
+    .data-wrap td:last-child .linkbtn{ font-size:13px; }
+    .data-wrap td.empty{ display:block !important; border:0 !important; text-align:center; padding:24px 0; }
+    .data-wrap td.empty::before{ display:none; }
+    .data-wrap tbody tr:has(td.empty){ background:transparent; border:1px dashed var(--rule); box-shadow:none; }
+  }
+
   ::selection{ background:var(--primary); color:#fff; }
 </style>
 </head>
@@ -580,15 +639,14 @@ function dashboardView(){
 }
 
 /* ── Bulk input helpers ── */
-function bulkBtnsInner(action,cur){
-  var b='';
-  [1,2,3].forEach(function(n){ b+='<button type="button" class="segbtn'+(cur===n?' active':'')+'" data-action="'+action+'" data-val="'+n+'">'+n+'</button>'; });
+function bulkBtnsInner(action,cur,max){
+  var b=''; for(var n=1;n<=(max||3);n++){ b+='<button type="button" class="segbtn'+(cur===n?' active':'')+'" data-action="'+action+'" data-val="'+n+'">'+n+'</button>'; }
   return b;
 }
-function bulkBarHtml(action,cur,id){
+function bulkBarHtml(action,cur,id,max,label){
   return '<div class="col4" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:2px;border-bottom:1px solid var(--rule)">'
-    + '<span class="xs muted">Input sekaligus (maks 3):</span>'
-    + '<span id="'+id+'" style="display:inline-flex;gap:6px">'+bulkBtnsInner(action,cur)+'</span></div>';
+    + '<span class="xs muted">'+(label||'Input sekaligus:')+'</span>'
+    + '<span id="'+id+'" style="display:inline-flex;gap:6px;flex-wrap:wrap">'+bulkBtnsInner(action,cur,max)+'</span></div>';
 }
 function invExtraItemsHtml(){
   var h='';
@@ -607,7 +665,7 @@ function saleExtraItemsHtml(){
     return '<option value="'+s.id+'">'+esc(s.productName)+' \u2014 sisa '+s.remaining+' \u2014 HPP '+formatRupiah(s.costPrice)+'</option>';
   }).join('');
   for(var k=2;k<=saleBulkCount;k++){
-    h+='<div class="col4" style="border-top:1px dashed var(--rule);padding-top:10px"><span class="xs muted" style="text-transform:uppercase;letter-spacing:.08em">Penjualan #'+k+'</span> <span class="xs muted">(tanggal, channel &amp; buyer mengikuti isian di atas)</span></div>'
+    h+='<div class="col4" style="border-top:1px dashed var(--rule);padding-top:10px"><span class="xs muted" style="text-transform:uppercase;letter-spacing:.08em">Penjualan #'+k+'</span> <span class="xs muted">(tanggal, channel, buyer &amp; invoice sama \u2014 jadi 1 invoice)</span></div>'
     +'<label class="fld col2"><span>Ambil dari stok (opsional)</span><select id="saleInvPick'+k+'" data-live="sale-invpick" data-idx="'+k+'">'+invOpts+'</select></label>'
     +'<label class="fld col2"><span>Nama produk #'+k+'</span><input id="saleProduct'+k+'" type="text"></label>'
     +'<label class="fld"><span>Harga jual per unit</span><input id="salePrice'+k+'" type="number" min="0"></label>'
@@ -615,6 +673,12 @@ function saleExtraItemsHtml(){
   }
   return h;
 }
+
+/* ── Order / 1-invoice helpers ── */
+function orderInvoiceFor(oid){ if(!oid) return null; var it=state.sales.find(function(s){ return s.orderId===oid && s.invoice; }); return it?it.invoice:null; }
+function saleShownInvoice(s){ return (s&&s.invoice) || (s&&s.orderId?orderInvoiceFor(s.orderId):null); }
+function orderCount(oid){ if(!oid) return 1; var c=0; for(var i=0;i<state.sales.length;i++){ if(state.sales[i].orderId===oid) c++; } return c; }
+function orderTag(s){ if(!s||!s.orderId) return ''; var n=orderCount(s.orderId); if(n<2) return ''; return ' <span class="order-tag">#'+String(s.orderId).slice(-4).toUpperCase()+' \u00b7 '+n+' brg</span>'; }
 
 /* ═══════════════════════ INVENTORY ═══════════════════════ */
 
@@ -625,7 +689,7 @@ function invFormHtml(){
   var condOpts = state.conditions.map(function(c){ return '<option '+(e&&e.condition===c?'selected':'')+'>'+esc(c)+'</option>'; }).join('');
   var warOpts = state.warranties.map(function(w){ return '<option '+(e&&e.warranty===w?'selected':'')+'>'+esc(w)+'</option>'; }).join('');
   return '<form data-form="inv" class="card form-grid">'
-    + (e?'':bulkBarHtml('inv-bulk',invBulkCount,'invBulkBtns'))
+    + (e?'':bulkBarHtml('inv-bulk',invBulkCount,'invBulkBtns',3,'Input sekaligus (maks 3):'))
     + '<label class="fld"><span>Tanggal masuk</span><input id="invDate" type="date" value="'+(e?esc(e.date):todayISO())+'" required></label>'
     + '<label class="fld col2"><span>Nama produk</span><input id="invProduct" type="text" value="'+v('productName')+'" placeholder="e.g. iPhone 15 Pro 256GB Natural Titanium" required></label>'
     + '<label class="fld"><span>Kategori</span><select id="invCategory">'+catOpts+'</select></label>'
@@ -660,22 +724,32 @@ function filteredStock(){
   return applySort(rows, invSort, invSortVal);
 }
 
+function invSortSelect(){
+  var opts=[['date:desc','Terbaru'],['date:asc','Terlama'],['productName:asc','Nama A–Z'],['costPrice:desc','HPP tertinggi'],['remaining:desc','Sisa terbanyak'],['soldQty:desc','Terjual terbanyak']];
+  var cur=invSort.key+':'+invSort.dir;
+  return '<select class="sort-mobile" data-live="inv-sort-select">'+opts.map(function(o){return '<option value="'+o[0]+'" '+(cur===o[0]?'selected':'')+'>Urutkan: '+o[1]+'</option>';}).join('')+'</select>';
+}
+function saleSortSelect(){
+  var opts=[['date:desc','Terbaru'],['date:asc','Terlama'],['revenue:desc','Omset tertinggi'],['netProfit:desc','Laba tertinggi'],['margin:desc','Margin tertinggi'],['productName:asc','Nama A–Z']];
+  var cur=salesSort.key+':'+salesSort.dir;
+  return '<select class="sort-mobile" data-live="sale-sort-select">'+opts.map(function(o){return '<option value="'+o[0]+'" '+(cur===o[0]?'selected':'')+'>Urutkan: '+o[1]+'</option>';}).join('')+'</select>';
+}
 function invRowsHtml(){
   var rows=filteredStock();
   if(!rows.length) return '<tr><td colspan="10" class="empty">Belum ada data. Tambahkan barang masuk di atas.</td></tr>';
   return rows.map(function(s){
     var remCls = s.remaining<=0 ? 'muted' : (s.daysInStock>30 ? 'warn' : '');
     return '<tr>'
-      + '<td class="num xs nowrap">'+formatDate(s.date)+'</td>'
-      + '<td><div>'+esc(s.productName)+'</div><div class="xs muted" style="margin-top:2px">'+esc(s.condition)+(s.supplier?' · '+esc(s.supplier):'')+(s.warranty?' · '+esc(s.warranty):'')+(s.invoice?' · <button class="linkbtn" data-action="view-invoice" data-kind="inv" data-id="'+s.id+'">invoice</button>':'')+'</div></td>'
-      + '<td class="xs">'+esc(s.category)+'</td>'
-      + '<td class="num xs">'+(s.imei?esc(s.imei):'—')+'</td>'
-      + '<td class="num tr nowrap">'+formatRupiah(s.costPrice)+'</td>'
-      + '<td class="num tr">'+s.qty+'</td>'
-      + '<td class="num tr">'+s.soldQty+'</td>'
-      + '<td class="num tr med '+remCls+'">'+s.remaining+'</td>'
-      + '<td class="num tr nowrap">'+formatRupiah(s.value)+'</td>'
-      + '<td class="nowrap"><button class="linkbtn" data-action="inv-edit" data-id="'+s.id+'">Edit</button> '
+      + '<td data-label="Tanggal" class="num xs nowrap">'+formatDate(s.date)+'</td>'
+      + '<td data-label="Produk"><div>'+esc(s.productName)+'</div><div class="xs muted" style="margin-top:2px">'+esc(s.condition)+(s.supplier?' · '+esc(s.supplier):'')+(s.warranty?' · '+esc(s.warranty):'')+(s.invoice?' · <button class="linkbtn" data-action="view-invoice" data-kind="inv" data-id="'+s.id+'">invoice</button>':'')+'</div></td>'
+      + '<td data-label="Kategori" class="xs">'+esc(s.category)+'</td>'
+      + '<td data-label="IMEI" class="num xs">'+(s.imei?esc(s.imei):'—')+'</td>'
+      + '<td data-label="HPP" class="num tr nowrap">'+formatRupiah(s.costPrice)+'</td>'
+      + '<td data-label="Qty" class="num tr">'+s.qty+'</td>'
+      + '<td data-label="Terjual" class="num tr">'+s.soldQty+'</td>'
+      + '<td data-label="Sisa" class="num tr med '+remCls+'">'+s.remaining+'</td>'
+      + '<td data-label="Nilai Sisa" class="num tr nowrap">'+formatRupiah(s.value)+'</td>'
+      + '<td data-label="Aksi" class="nowrap"><button class="linkbtn" data-action="inv-edit" data-id="'+s.id+'">Edit</button> '
       +   '<button class="linkbtn danger" data-action="inv-del" data-id="'+s.id+'">Hapus</button></td>'
       + '</tr>';
   }).join('');
@@ -690,11 +764,13 @@ function inventoryView(){
     +   '<div class="toolbar">'
     +     '<label class="chk"><input type="checkbox" data-live="inv-onlyavail" '+(invFilters.onlyAvail?'checked':'')+'> Hanya tersedia</label>'
     +     '<input class="search" type="text" placeholder="Cari produk / IMEI / supplier…" data-live="inv-search" value="'+esc(invFilters.search)+'">'
+    +     invSortSelect()
     +     '<select data-live="inv-category"><option value="all">Semua kategori</option>'
     +       state.categories.map(function(c){return '<option '+(invFilters.category===c?'selected':'')+'>'+esc(c)+'</option>';}).join('')
     +     '</select>'
     +   '</div></div>'
-    +   '<div class="tbl-wrap"><table style="min-width:1000px"><thead><tr>'
+    +   '<div class="list-summary" id="invSummary">'+invSummaryHtml()+'</div>'
+    +   '<div class="tbl-wrap data-wrap"><table style="min-width:1000px"><thead><tr>'
     +     sortTh('Tanggal','date',invSort,'inv-sort')
     +     sortTh('Produk','productName',invSort,'inv-sort')
     +     sortTh('Kategori','category',invSort,'inv-sort')
@@ -709,9 +785,21 @@ function inventoryView(){
     + '</div>';
 }
 
+function invSummaryHtml(){
+  var rows=filteredStock();
+  var qty=0, sold=0, remain=0, buyTotal=0, valRemain=0;
+  rows.forEach(function(s){
+    qty+=Number(s.qty)||0; sold+=Number(s.soldQty)||0;
+    remain+=Math.max(0,Number(s.remaining)||0);
+    buyTotal+=(Number(s.costPrice)||0)*(Number(s.qty)||0);
+    valRemain+=Number(s.value)||0;
+  });
+  return 'Total '+rows.length+' produk · <span class="num med">'+qty+'</span> unit masuk · <span class="num">'+sold+'</span> terjual · <span class="num med">'+remain+'</span> sisa · nilai beli <span class="num">'+formatRupiah(buyTotal)+'</span> · nilai sisa <span class="num">'+formatRupiah(valRemain)+'</span>';
+}
 function updateInvTable(){
   var tb=document.getElementById('invTbody'); if(tb) tb.innerHTML=invRowsHtml();
   var c=document.getElementById('invCount'); if(c) c.textContent=filteredStock().length;
+  var sm=document.getElementById('invSummary'); if(sm) sm.innerHTML=invSummaryHtml();
 }
 
 /* ═══════════════════════ SALES ═══════════════════════ */
@@ -731,7 +819,7 @@ function salesFormHtml(){
   var curFee = getMarketplaceFee(curChan,state.marketplaces);
   var adminVal = (e && e.adminFeeOverride!=null) ? esc(e.adminFeeOverride) : '';
   return '<form data-form="sale" class="card form-grid">'
-    + (e?'':bulkBarHtml('sale-bulk',saleBulkCount,'saleBulkBtns'))
+    + (e?'':bulkBarHtml('sale-bulk',saleBulkCount,'saleBulkBtns',6,'Barang dalam 1 invoice \u2014 pembeli beli beberapa sekaligus (maks 6):'))
     + '<label class="fld"><span>Tanggal keluar</span><input id="saleDate" type="date" value="'+(e?esc(e.date):todayISO())+'" required></label>'
     + '<label class="fld col3"><span>Ambil dari stok (opsional — HPP auto-link)</span><select id="saleInvPick" data-live="sale-invpick">'+invOpts+'</select></label>'
     + '<label class="fld col2"><span>Nama produk</span><input id="saleProduct" type="text" value="'+(e?esc(e.productName):'')+'" required></label>'
@@ -771,17 +859,17 @@ function salesRowsHtml(){
     var m=calculateSaleMetrics(s,state.inventory,state.marketplaces);
     var color=getMarketplaceColor(s.channel,state.marketplaces);
     return '<tr>'
-      + '<td class="num xs nowrap">'+formatDate(s.date)+'</td>'
-      + '<td><div>'+esc(s.productName)+'</div><div class="xs muted" style="margin-top:2px">'+(s.buyer?esc(s.buyer):'—')+'</div></td>'
-      + '<td><span class="chan">'+channelIcon(s.channel,15)+' '+esc(s.channel)+'</span></td>'
-      + '<td class="num tr xs nowrap">'+formatRupiah(m.hpp)+'</td>'
-      + '<td class="num tr nowrap">'+formatRupiah(s.sellPrice)+'</td>'
-      + '<td class="num tr">'+s.qty+'</td>'
-      + '<td class="num tr nowrap">'+formatRupiah(m.revenue)+'</td>'
-      + '<td class="num tr xs nowrap">'+formatRupiah(m.adminFee)+'</td>'
-      + '<td class="num tr med nowrap '+(m.netProfit>=0?'profit':'danger')+'">'+formatRupiah(m.netProfit)+'</td>'
-      + '<td class="num tr xs '+(m.margin>=0?'profit':'danger')+'">'+m.margin.toFixed(1)+'%</td>'
-      + '<td class="nowrap"><button class="linkbtn" data-action="sale-edit" data-id="'+s.id+'">Edit</button> '
+      + '<td data-label="Tgl" class="num xs nowrap">'+formatDate(s.date)+'</td>'
+      + '<td data-label="Produk"><div>'+esc(s.productName)+orderTag(s)+'</div><div class="xs muted" style="margin-top:2px">'+(s.buyer?esc(s.buyer):'—')+'</div></td>'
+      + '<td data-label="Channel"><span class="chan">'+channelIcon(s.channel,15)+' '+esc(s.channel)+'</span></td>'
+      + '<td data-label="HPP" class="num tr xs nowrap">'+formatRupiah(m.hpp)+'</td>'
+      + '<td data-label="Harga Jual" class="num tr nowrap">'+formatRupiah(s.sellPrice)+'</td>'
+      + '<td data-label="Qty" class="num tr">'+s.qty+'</td>'
+      + '<td data-label="Omset" class="num tr nowrap">'+formatRupiah(m.revenue)+'</td>'
+      + '<td data-label="B. Admin" class="num tr xs nowrap">'+formatRupiah(m.adminFee)+'</td>'
+      + '<td data-label="Net Profit" class="num tr med nowrap '+(m.netProfit>=0?'profit':'danger')+'">'+formatRupiah(m.netProfit)+'</td>'
+      + '<td data-label="Margin" class="num tr xs '+(m.margin>=0?'profit':'danger')+'">'+m.margin.toFixed(1)+'%</td>'
+      + '<td data-label="Aksi" class="nowrap"><button class="linkbtn" data-action="sale-edit" data-id="'+s.id+'">Edit</button> '
       +   '<button class="linkbtn danger" data-action="sale-del" data-id="'+s.id+'">Hapus</button></td>'
       + '</tr>';
   }).join('');
@@ -799,10 +887,12 @@ function salesView(){
     +   '<h2 class="sec-title">Riwayat Transaksi (<span id="saleCount">'+count+'</span>)</h2>'
     +   '<div class="toolbar">'
     +     '<input class="search" type="text" placeholder="Cari produk / buyer…" data-live="sale-search" value="'+esc(salesFilters.search)+'">'
+    +     saleSortSelect()
     +     '<select data-live="sale-category-filter">'+catFilterOpts+'</select>'
     +     '<select data-live="sale-channel-filter">'+chanFilterOpts+'</select>'
     +   '</div></div>'
-    +   '<div class="tbl-wrap"><table style="min-width:1200px"><thead><tr>'
+    +   '<div class="list-summary" id="saleSummary">'+saleSummaryHtml()+'</div>'
+    +   '<div class="tbl-wrap data-wrap"><table style="min-width:1200px"><thead><tr>'
     +     sortTh('Tgl','date',salesSort,'sale-sort')
     +     sortTh('Produk','productName',salesSort,'sale-sort')
     +     sortTh('Channel','channel',salesSort,'sale-sort')
@@ -818,9 +908,20 @@ function salesView(){
     + '</div>';
 }
 
+function saleSummaryHtml(){
+  var rows=filteredSales();
+  var qty=0, omset=0, net=0;
+  rows.forEach(function(s){
+    var m=calculateSaleMetrics(s,state.inventory,state.marketplaces);
+    qty+=Number(s.qty)||0; omset+=m.revenue; net+=m.netProfit;
+  });
+  var margin=omset>0?(net/omset*100):0;
+  return 'Total '+rows.length+' transaksi · <span class="num med">'+qty+'</span> unit · omset <span class="num">'+formatRupiah(omset)+'</span> · laba bersih <span class="num med '+(net>=0?'profit':'danger')+'">'+formatRupiah(net)+'</span> · margin '+margin.toFixed(1)+'%';
+}
 function updateSalesTable(){
   var tb=document.getElementById('saleTbody'); if(tb) tb.innerHTML=salesRowsHtml();
   var c=document.getElementById('saleCount'); if(c) c.textContent=filteredSales().length;
+  var sm=document.getElementById('saleSummary'); if(sm) sm.innerHTML=saleSummaryHtml();
 }
 
 /* ═══════════════════════ TAX ═══════════════════════ */
@@ -860,12 +961,12 @@ function taxView(){
       var txRows = applySort(m.list, taxDetailSort, saleSortVal).map(function(s){
         var mm=calculateSaleMetrics(s,state.inventory,state.marketplaces);
         return '<tr><td class="num xs nowrap">'+formatDate(s.date)+'</td>'
-          + '<td class="xs">'+esc(s.productName)+'</td>'
+          + '<td class="xs">'+esc(s.productName)+orderTag(s)+'</td>'
           + '<td><span class="chan">'+channelIcon(s.channel,13)+' <span class="xs">'+esc(s.channel)+'</span></span></td>'
           + '<td class="num tr xs">'+s.qty+'</td>'
           + '<td class="num tr xs nowrap">'+formatRupiah(mm.revenue)+'</td>'
           + '<td class="num tr xs nowrap '+(mm.netProfit>=0?'profit':'danger')+'">'+formatRupiah(mm.netProfit)+'</td>'
-          + '<td class="xs nowrap">'+(s.invoice?'<button class="linkbtn" data-action="view-invoice" data-kind="sale" data-id="'+s.id+'">unduh</button>':'—')+'</td></tr>';
+          + '<td class="xs nowrap">'+(saleShownInvoice(s)?'<button class="linkbtn" data-action="view-invoice" data-kind="sale" data-id="'+s.id+'">unduh</button>':'—')+'</td></tr>';
       }).join('');
       detail = '<div style="margin-bottom:10px">'+summary+'</div>'
         + '<div class="tbl-wrap" style="border:1px solid var(--rule)"><table style="min-width:600px"><thead><tr>'
@@ -1283,15 +1384,17 @@ function submitSale(){
     state.sales=state.sales.map(function(s){ return s.id===editingSaleId ? Object.assign({},item,{id:editingSaleId}) : s; });
     editingSaleId=null;
   } else {
-    state.sales.unshift(Object.assign({},item,{id:uid()}));
+    var lines=[ Object.assign({},item,{id:uid()}) ];
     for(var k=2;k<=saleBulkCount;k++){
       var nm=val('saleProduct'+k), pr=val('salePrice'+k);
       if(!nm || pr==='') continue;
       var pk=document.getElementById('saleInvPick'+k);
-      state.sales.unshift({ id:uid(), date:item.date, inventoryId:(pk?pk.value:''), productName:nm, channel:item.channel,
+      lines.push({ id:uid(), date:item.date, inventoryId:(pk?pk.value:''), productName:nm, channel:item.channel,
         sellPrice:Number(pr), qty:Number(val('saleQty'+k))||1, adminFeeOverride:null, shippingCost:0,
         buyer:item.buyer, invoice:null, notes:'' });
     }
+    if(lines.length>1){ var oid=uid(); lines.forEach(function(L){ L.orderId=oid; }); }
+    for(var li=lines.length-1; li>=0; li--){ state.sales.unshift(lines[li]); }
     saleBulkCount=1;
   }
   saleInvoicePending=undefined;
@@ -1418,13 +1521,13 @@ function onClick(e){
     case 'inv-bulk': {
       invBulkCount=Number(t.getAttribute('data-val'))||1;
       var c1=document.getElementById('invExtraItems'); if(c1) c1.innerHTML=invExtraItemsHtml();
-      var b1=document.getElementById('invBulkBtns'); if(b1) b1.innerHTML=bulkBtnsInner('inv-bulk',invBulkCount);
+      var b1=document.getElementById('invBulkBtns'); if(b1) b1.innerHTML=bulkBtnsInner('inv-bulk',invBulkCount,3);
       break;
     }
     case 'sale-bulk': {
       saleBulkCount=Number(t.getAttribute('data-val'))||1;
       var c2=document.getElementById('saleExtraItems'); if(c2) c2.innerHTML=saleExtraItemsHtml();
-      var b2=document.getElementById('saleBulkBtns'); if(b2) b2.innerHTML=bulkBtnsInner('sale-bulk',saleBulkCount);
+      var b2=document.getElementById('saleBulkBtns'); if(b2) b2.innerHTML=bulkBtnsInner('sale-bulk',saleBulkCount,6);
       break;
     }
     case 'add-category': addCategory(); break;
@@ -1469,13 +1572,14 @@ function onClick(e){
     }
     case 'sb-sync': cloudSyncNow(); break;
     case 'sb-signout': cloudSignOut(); break;
+    case 'sb-retry': enterCloud(); break;
     case 'inv-invoice-remove': { invInvoicePending=null; var st_i=document.getElementById('invInvoiceStatus'); if(st_i) st_i.textContent='(invoice akan dihapus saat simpan)'; break; }
     case 'sale-invoice-remove': { saleInvoicePending=null; var st_s=document.getElementById('saleInvoiceStatus'); if(st_s) st_s.textContent='(invoice akan dihapus saat simpan)'; break; }
     case 'view-invoice': {
       var vk=t.getAttribute('data-kind'), vid=t.getAttribute('data-id');
       var arr=(vk==='inv')?state.inventory:state.sales;
       var it=arr.find(function(x){return x.id===vid;});
-      if(it) showInvoice(it.invoice);
+      if(it) showInvoice(vk==='sale'?saleShownInvoice(it):it.invoice);
       break;
     }
     case 'remove-logo': {
@@ -1526,6 +1630,8 @@ function onChange(e){
     case 'inv-category': invFilters.category=el.value; updateInvTable(); break;
     case 'sale-channel-filter': salesFilters.channel=el.value; updateSalesTable(); break;
     case 'sale-category-filter': salesFilters.category=el.value; updateSalesTable(); break;
+    case 'inv-sort-select': { var isp=el.value.split(':'); invSort={key:isp[0],dir:isp[1]||'desc'}; render(); break; }
+    case 'sale-sort-select': { var ssp=el.value.split(':'); salesSort={key:ssp[0],dir:ssp[1]||'desc'}; render(); break; }
     case 'sale-channel': {
       var fee=getMarketplaceFee(el.value,state.marketplaces);
       var lab=document.getElementById('feeLabel');
@@ -1723,6 +1829,17 @@ function boot(){
     enterCloud();
   }).catch(function(){ renderLoginScreen('Gagal memeriksa sesi. Coba masuk lagi.'); });
 }
+function renderSetupScreen(err){
+  renderGate(
+    '<div class="card">'
+    + '<h2 class="display" style="font-size:22px;margin:0 0 6px">Satu langkah lagi: buat tabel database</h2>'
+    + '<p class="note" style="margin:0 0 12px">Login berhasil, tapi tabel datanya belum ada di Supabase. Jalankan SQL ini <strong style="color:var(--ink)">sekali</strong>: di Supabase buka <strong style="color:var(--ink)">SQL Editor \u2192 New query</strong> \u2192 tempel \u2192 <strong style="color:var(--ink)">Run</strong>. Setelah itu tekan <strong style="color:var(--ink)">Coba lagi</strong>.</p>'
+    + (err?'<div class="alert danger" style="margin:0 0 12px">'+esc(err)+'</div>':'')
+    + '<pre style="white-space:pre-wrap;font-size:11px;background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:10px;margin:0 0 14px;overflow:auto">'+esc(sqlSetupText())+'</pre>'
+    + '<div class="toolbar"><button class="btn btn-primary" data-action="sb-retry">Coba lagi</button>'
+    + '<button class="btn btn-outline" data-action="sb-signout">Keluar</button></div>'
+    + '</div>');
+}
 function enterCloud(){
   cloudMode=true; setCloudStatus('loading');
   renderLoadingScreen('Memuat data dari cloud\u2026');
@@ -1730,8 +1847,12 @@ function enterCloud(){
     if(d){ applyBlob(d); localPersist(); setCloudStatus('synced'); render(); }
     else { doCloudSave().then(function(){ render(); }); }
   }).catch(function(e){
-    cloudMode=false;
-    renderLoginScreen('Gagal memuat data: '+((e&&e.message)||e)+'. Pastikan tabel & policy sudah dibuat (lihat SQL di layar koneksi).');
+    var msg=(e&&e.message)||String(e);
+    if(/schema cache|could not find the table|relation .*app_data|does not exist|permission denied|row-level security|rls/i.test(msg)){
+      renderSetupScreen('Pesan Supabase: '+msg);
+    } else {
+      renderLoginScreen(authErrHint('Gagal memuat data: '+msg));
+    }
   });
 }
 function cloudSignOut(){
