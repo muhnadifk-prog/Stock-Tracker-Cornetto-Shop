@@ -155,6 +155,16 @@
   .combo-item:hover{ background:var(--paper); }
   .combo-item.combo-manual{ color:var(--muted); }
   .combo-item > span:first-child{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pager{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; }
+  .pager-info{ font-size:12px; color:var(--muted); }
+  .pager-controls{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .pg-btn, .pg-num{ min-width:32px; height:32px; padding:0 9px; border:1px solid var(--rule); background:#fff; border-radius:7px; font-size:13px; cursor:pointer; color:var(--ink); font-family:inherit; }
+  .pg-btn:hover:not(:disabled), .pg-num:hover{ background:var(--paper); }
+  .pg-num.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
+  .pg-btn:disabled{ opacity:.4; cursor:default; }
+  .pg-dots{ padding:0 2px; color:var(--muted); }
+  .pg-size{ font-size:12px; color:var(--muted); display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
+  .pg-size select{ width:auto; padding:6px 8px; font-size:13px; }
   .sort-mobile{ display:none; }
 
   @media (min-width: 768px){
@@ -383,6 +393,7 @@ var invFilters = { search:'', category:'all', onlyAvail:false };
 var salesFilters = { search:'', channel:'all', category:'all' };
 var invSort = { key:'date', dir:'desc' };
 var salesSort = { key:'date', dir:'desc' };
+var invPage=1, invPageSize=10, salesPage=1, salesPageSize=10;
 var chartMetric = 'omset';
 var chartGroup = 'bulanan';
 var editingInvId = null, editingSaleId = null;
@@ -800,9 +811,59 @@ function saleSortSelect(){
   var cur=salesSort.key+':'+salesSort.dir;
   return '<select class="sort-mobile" data-live="sale-sort-select">'+opts.map(function(o){return '<option value="'+o[0]+'" '+(cur===o[0]?'selected':'')+'>Urutkan: '+o[1]+'</option>';}).join('')+'</select>';
 }
+function pageSizeOpts(cur){ var out=''; for(var n=10;n<=50;n+=10){ out+='<option value="'+n+'" '+(cur===n?'selected':'')+'>'+n+'</option>'; } return out; }
+function pagerNumbers(page,pages,action){
+  var out=[];
+  function add(n){ out.push('<button class="pg-num'+(n===page?' active':'')+'" data-action="'+action+'" data-page="'+n+'">'+n+'</button>'); }
+  function dots(){ out.push('<span class="pg-dots">…</span>'); }
+  if(pages<=7){ for(var i=1;i<=pages;i++) add(i); }
+  else {
+    add(1); if(page>3) dots();
+    var s=Math.max(2,page-1), e=Math.min(pages-1,page+1);
+    for(var j=s;j<=e;j++) add(j);
+    if(page<pages-2) dots(); add(pages);
+  }
+  return out.join('');
+}
+function invPagedStock(){
+  var rows=filteredStock(); var total=rows.length;
+  var pages=Math.max(1,Math.ceil(total/invPageSize));
+  if(invPage>pages) invPage=pages; if(invPage<1) invPage=1;
+  var start=(invPage-1)*invPageSize;
+  return { rows:rows, page:rows.slice(start,start+invPageSize), total:total, pages:pages, start:start };
+}
+function invPagerHtml(){
+  var d=invPagedStock(); if(d.total===0) return '';
+  var from=d.start+1, to=Math.min(d.start+invPageSize,d.total);
+  return '<div class="pager"><div class="pager-info">Menampilkan '+from+'–'+to+' dari '+d.total+' barang</div>'
+    + '<div class="pager-controls">'
+    +   '<button class="pg-btn" '+(invPage>1?'':'disabled')+' data-action="inv-page" data-page="'+(invPage-1)+'">‹</button>'
+    +   pagerNumbers(invPage,d.pages,'inv-page')
+    +   '<button class="pg-btn" '+(invPage<d.pages?'':'disabled')+' data-action="inv-page" data-page="'+(invPage+1)+'">›</button>'
+    +   '<label class="pg-size">Per halaman <select data-live="inv-pagesize">'+pageSizeOpts(invPageSize)+'</select></label>'
+    + '</div></div>';
+}
+function salesPagedSales(){
+  var rows=filteredSales(); var total=rows.length;
+  var pages=Math.max(1,Math.ceil(total/salesPageSize));
+  if(salesPage>pages) salesPage=pages; if(salesPage<1) salesPage=1;
+  var start=(salesPage-1)*salesPageSize;
+  return { rows:rows, page:rows.slice(start,start+salesPageSize), total:total, pages:pages, start:start };
+}
+function salesPagerHtml(){
+  var d=salesPagedSales(); if(d.total===0) return '';
+  var from=d.start+1, to=Math.min(d.start+salesPageSize,d.total);
+  return '<div class="pager"><div class="pager-info">Menampilkan '+from+'–'+to+' dari '+d.total+' transaksi</div>'
+    + '<div class="pager-controls">'
+    +   '<button class="pg-btn" '+(salesPage>1?'':'disabled')+' data-action="sale-page" data-page="'+(salesPage-1)+'">‹</button>'
+    +   pagerNumbers(salesPage,d.pages,'sale-page')
+    +   '<button class="pg-btn" '+(salesPage<d.pages?'':'disabled')+' data-action="sale-page" data-page="'+(salesPage+1)+'">›</button>'
+    +   '<label class="pg-size">Per halaman <select data-live="sale-pagesize">'+pageSizeOpts(salesPageSize)+'</select></label>'
+    + '</div></div>';
+}
 function invRowsHtml(){
-  var rows=filteredStock();
-  if(!rows.length) return '<tr><td colspan="10" class="empty">Belum ada data. Tambahkan barang masuk di atas.</td></tr>';
+  var rows=invPagedStock().page;
+  if(!rows.length) return '<tr><td colspan="10" class="empty">Belum ada data / tidak ada hasil.</td></tr>';
   return rows.map(function(s){
     var remCls = s.remaining<=0 ? 'muted' : (s.daysInStock>30 ? 'warn' : '');
     return '<tr>'
@@ -848,6 +909,7 @@ function inventoryView(){
     +     sortTh('Nilai Sisa','value',invSort,'inv-sort','tr')
     +     '<th>Aksi</th>'
     +   '</tr></thead><tbody id="invTbody">'+invRowsHtml()+'</tbody></table></div>'
+    +   '<div id="invPager">'+invPagerHtml()+'</div>'
     + '</div>';
 }
 
@@ -866,6 +928,7 @@ function updateInvTable(){
   var tb=document.getElementById('invTbody'); if(tb) tb.innerHTML=invRowsHtml();
   var c=document.getElementById('invCount'); if(c) c.textContent=filteredStock().length;
   var sm=document.getElementById('invSummary'); if(sm) sm.innerHTML=invSummaryHtml();
+  var pg=document.getElementById('invPager'); if(pg) pg.innerHTML=invPagerHtml();
 }
 
 /* ═══════════════════════ SALES ═══════════════════════ */
@@ -919,8 +982,8 @@ function filteredSales(){
 }
 
 function salesRowsHtml(){
-  var rows=filteredSales();
-  if(!rows.length) return '<tr><td colspan="11" class="empty">Belum ada transaksi.</td></tr>';
+  var rows=salesPagedSales().page;
+  if(!rows.length) return '<tr><td colspan="11" class="empty">Belum ada transaksi / tidak ada hasil.</td></tr>';
   return rows.map(function(s){
     var m=calculateSaleMetrics(s,state.inventory,state.marketplaces);
     var color=getMarketplaceColor(s.channel,state.marketplaces);
@@ -971,6 +1034,7 @@ function salesView(){
     +     sortTh('Margin','margin',salesSort,'sale-sort','tr')
     +     '<th>Aksi</th>'
     +   '</tr></thead><tbody id="saleTbody">'+salesRowsHtml()+'</tbody></table></div>'
+    +   '<div id="salePager">'+salesPagerHtml()+'</div>'
     + '</div>';
 }
 
@@ -988,6 +1052,7 @@ function updateSalesTable(){
   var tb=document.getElementById('saleTbody'); if(tb) tb.innerHTML=salesRowsHtml();
   var c=document.getElementById('saleCount'); if(c) c.textContent=filteredSales().length;
   var sm=document.getElementById('saleSummary'); if(sm) sm.innerHTML=saleSummaryHtml();
+  var pg=document.getElementById('salePager'); if(pg) pg.innerHTML=salesPagerHtml();
 }
 
 /* ═══════════════════════ TAX ═══════════════════════ */
@@ -1435,7 +1500,7 @@ function submitInv(){
     }
     invBulkCount=1;
   }
-  invInvoicePending=undefined;
+  invInvoicePending=undefined; invPage=1;
   __saveErr=null; persist();
   if(__saveErr && !cloudMode){ uiAlert('Penyimpanan browser penuh. Data / invoice terbaru mungkin tidak tersimpan. Kurangi ukuran file invoice, atau ekspor lalu bersihkan data lama.'); }
   render();
@@ -1469,7 +1534,7 @@ function submitSale(){
     for(var li=lines.length-1; li>=0; li--){ state.sales.unshift(lines[li]); }
     saleBulkCount=1;
   }
-  saleInvoicePending=undefined;
+  saleInvoicePending=undefined; salesPage=1;
   __saveErr=null; persist();
   if(__saveErr && !cloudMode){ uiAlert('Penyimpanan browser penuh. Data / invoice terbaru mungkin tidak tersimpan. Kurangi ukuran file invoice, atau ekspor lalu bersihkan data lama.'); }
   render();
@@ -1580,14 +1645,16 @@ function onClick(e){
       var sk=t.getAttribute('data-key');
       if(invSort.key===sk) invSort.dir=invSort.dir==='asc'?'desc':'asc';
       else { invSort.key=sk; invSort.dir=(sk==='productName'||sk==='category')?'asc':'desc'; }
-      render(); break;
+      invPage=1; render(); break;
     }
+    case 'inv-page': invPage=Number(t.getAttribute('data-page'))||1; updateInvTable(); break;
     case 'sale-sort': {
       var sk2=t.getAttribute('data-key');
       if(salesSort.key===sk2) salesSort.dir=salesSort.dir==='asc'?'desc':'asc';
       else { salesSort.key=sk2; salesSort.dir=(sk2==='productName'||sk2==='channel')?'asc':'desc'; }
-      render(); break;
+      salesPage=1; render(); break;
     }
+    case 'sale-page': salesPage=Number(t.getAttribute('data-page'))||1; updateSalesTable(); break;
     case 'chart-metric': chartMetric=t.getAttribute('data-val'); render(); break;
     case 'chart-group': chartGroup=t.getAttribute('data-val'); render(); break;
     case 'inv-bulk': {
@@ -1703,8 +1770,8 @@ function onSubmit(e){
 function onInput(e){
   var el=e.target.closest('[data-live]'); if(!el) return;
   var k=el.getAttribute('data-live');
-  if(k==='inv-search'){ invFilters.search=el.value; updateInvTable(); }
-  else if(k==='sale-search'){ salesFilters.search=el.value; updateSalesTable(); }
+  if(k==='inv-search'){ invFilters.search=el.value; invPage=1; updateInvTable(); }
+  else if(k==='sale-search'){ salesFilters.search=el.value; salesPage=1; updateSalesTable(); }
   else if(k==='set-bizname'){
     state.settings.businessName=el.value; persist();
     var h=document.getElementById('hdBiz');
@@ -1717,12 +1784,14 @@ function onChange(e){
   var el=e.target.closest('[data-live]'); if(!el) return;
   var k=el.getAttribute('data-live');
   switch(k){
-    case 'inv-onlyavail': invFilters.onlyAvail=el.checked; updateInvTable(); break;
-    case 'inv-category': invFilters.category=el.value; updateInvTable(); break;
-    case 'sale-channel-filter': salesFilters.channel=el.value; updateSalesTable(); break;
-    case 'sale-category-filter': salesFilters.category=el.value; updateSalesTable(); break;
-    case 'inv-sort-select': { var isp=el.value.split(':'); invSort={key:isp[0],dir:isp[1]||'desc'}; render(); break; }
-    case 'sale-sort-select': { var ssp=el.value.split(':'); salesSort={key:ssp[0],dir:ssp[1]||'desc'}; render(); break; }
+    case 'inv-onlyavail': invFilters.onlyAvail=el.checked; invPage=1; updateInvTable(); break;
+    case 'inv-category': invFilters.category=el.value; invPage=1; updateInvTable(); break;
+    case 'inv-pagesize': invPageSize=Number(el.value)||10; invPage=1; updateInvTable(); break;
+    case 'sale-channel-filter': salesFilters.channel=el.value; salesPage=1; updateSalesTable(); break;
+    case 'sale-category-filter': salesFilters.category=el.value; salesPage=1; updateSalesTable(); break;
+    case 'sale-pagesize': salesPageSize=Number(el.value)||10; salesPage=1; updateSalesTable(); break;
+    case 'inv-sort-select': { var isp=el.value.split(':'); invSort={key:isp[0],dir:isp[1]||'desc'}; invPage=1; render(); break; }
+    case 'sale-sort-select': { var ssp=el.value.split(':'); salesSort={key:ssp[0],dir:ssp[1]||'desc'}; salesPage=1; render(); break; }
     case 'sale-channel': {
       var fee=getMarketplaceFee(el.value,state.marketplaces);
       var lab=document.getElementById('feeLabel');
