@@ -147,6 +147,14 @@
   .cloud-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; }
   .order-tag{ display:inline-block; font-size:10px; font-weight:600; color:var(--primary); background:rgba(30,27,75,.08); border-radius:6px; padding:1px 6px; margin-left:6px; white-space:nowrap; }
   .list-summary{ font-size:12.5px; color:var(--muted); background:var(--paper); border:1px solid var(--rule); border-radius:6px; padding:8px 12px; margin-bottom:10px; line-height:1.6; }
+  .combo{ position:relative; }
+  .combo-input{ width:100%; }
+  .combo-list{ position:absolute; left:0; right:0; top:100%; z-index:50; background:#fff; border:1px solid var(--rule); border-radius:8px; margin-top:4px; max-height:300px; overflow-y:auto; box-shadow:0 10px 28px rgba(19,20,24,.14); }
+  .combo-item{ padding:9px 12px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--rule); display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
+  .combo-item:last-child{ border-bottom:0; }
+  .combo-item:hover{ background:var(--paper); }
+  .combo-item.combo-manual{ color:var(--muted); }
+  .combo-item > span:first-child{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .sort-mobile{ display:none; }
 
   @media (max-width: 767px){
@@ -666,7 +674,7 @@ function saleExtraItemsHtml(){
   }).join('');
   for(var k=2;k<=saleBulkCount;k++){
     h+='<div class="col4" style="border-top:1px dashed var(--rule);padding-top:10px"><span class="xs muted" style="text-transform:uppercase;letter-spacing:.08em">Penjualan #'+k+'</span> <span class="xs muted">(tanggal, channel, buyer &amp; invoice sama \u2014 jadi 1 invoice)</span></div>'
-    +'<label class="fld col2"><span>Ambil dari stok (opsional)</span><select id="saleInvPick'+k+'" data-live="sale-invpick" data-idx="'+k+'">'+invOpts+'</select></label>'
+    +'<label class="fld col2"><span>Ambil dari stok (opsional — ketik untuk cari)</span>'+comboBoxHtml(k,'')+'</label>'
     +'<label class="fld col2"><span>Nama produk #'+k+'</span><input id="saleProduct'+k+'" type="text"></label>'
     +'<label class="fld"><span>Harga jual per unit</span><input id="salePrice'+k+'" type="number" min="0"></label>'
     +'<label class="fld"><span>Qty</span><input id="saleQty'+k+'" type="number" min="1" value="1"></label>';
@@ -679,6 +687,53 @@ function orderInvoiceFor(oid){ if(!oid) return null; var it=state.sales.find(fun
 function saleShownInvoice(s){ return (s&&s.invoice) || (s&&s.orderId?orderInvoiceFor(s.orderId):null); }
 function orderCount(oid){ if(!oid) return 1; var c=0; for(var i=0;i<state.sales.length;i++){ if(state.sales[i].orderId===oid) c++; } return c; }
 function orderTag(s){ if(!s||!s.orderId) return ''; var n=orderCount(s.orderId); if(n<2) return ''; return ' <span class="order-tag">#'+String(s.orderId).slice(-4).toUpperCase()+' \u00b7 '+n+' brg</span>'; }
+
+/* ── Searchable stock picker (combobox) ── */
+function comboLabelFor(id){
+  if(!id) return '';
+  var s=getStock().find(function(x){return x.id===id;});
+  if(s) return s.productName+' — sisa '+s.remaining+' — HPP '+formatRupiah(s.costPrice);
+  var i=state.inventory.find(function(x){return x.id===id;});
+  return i?i.productName:'';
+}
+function comboBoxHtml(idx, selId){
+  return '<div class="combo">'
+    + '<input type="text" class="combo-input" data-live="combo-search" data-idx="'+idx+'" placeholder="Ketik nama barang untuk cari… (opsional)" autocomplete="off" value="'+esc(comboLabelFor(selId))+'">'
+    + '<input type="hidden" id="saleInvPick'+idx+'" value="'+esc(selId||'')+'">'
+    + '<div class="combo-list" id="comboList'+idx+'" style="display:none"></div>'
+    + '</div>';
+}
+function comboRender(idx, query){
+  var q=(query||'').trim().toLowerCase();
+  var items=getStock().filter(function(s){ return s.remaining>0; })
+    .filter(function(s){ return !q || s.productName.toLowerCase().indexOf(q)>-1 || (s.imei||'').toLowerCase().indexOf(q)>-1; });
+  var html='<div class="combo-item combo-manual" data-action="combo-pick" data-idx="'+idx+'" data-id="" data-label="">— Manual (tidak dari stok) —</div>';
+  html+=items.slice(0,60).map(function(s){
+    var label=esc(s.productName)+' — sisa '+s.remaining+' — HPP '+formatRupiah(s.costPrice);
+    return '<div class="combo-item" data-action="combo-pick" data-idx="'+idx+'" data-id="'+s.id+'" data-label="'+label+'"><span>'+esc(s.productName)+'</span><span class="muted xs" style="white-space:nowrap">sisa '+s.remaining+' · '+formatRupiah(s.costPrice)+'</span></div>';
+  }).join('');
+  if(!items.length) html+='<div class="combo-item muted" style="cursor:default;justify-content:flex-start">Tidak ada barang cocok</div>';
+  return html;
+}
+function comboFilter(el){
+  var idx=el.getAttribute('data-idx')||'';
+  var list=document.getElementById('comboList'+idx);
+  if(list){ list.innerHTML=comboRender(idx, el.value); list.style.display='block'; }
+  var hidden=document.getElementById('saleInvPick'+idx);
+  if(hidden) hidden.value='';
+}
+function comboFocus(e){
+  var el=(e.target && e.target.closest) ? e.target.closest('.combo-input') : null;
+  if(!el) return;
+  var idx=el.getAttribute('data-idx')||'';
+  var list=document.getElementById('comboList'+idx);
+  if(list){ list.innerHTML=comboRender(idx, el.value); list.style.display='block'; }
+}
+function comboOutside(e){
+  if(e.target.closest && e.target.closest('.combo')) return;
+  var lists=document.querySelectorAll('.combo-list');
+  for(var i=0;i<lists.length;i++){ lists[i].style.display='none'; }
+}
 
 /* ═══════════════════════ INVENTORY ═══════════════════════ */
 
@@ -821,7 +876,7 @@ function salesFormHtml(){
   return '<form data-form="sale" class="card form-grid">'
     + (e?'':bulkBarHtml('sale-bulk',saleBulkCount,'saleBulkBtns',6,'Barang dalam 1 invoice \u2014 pembeli beli beberapa sekaligus (maks 6):'))
     + '<label class="fld"><span>Tanggal keluar</span><input id="saleDate" type="date" value="'+(e?esc(e.date):todayISO())+'" required></label>'
-    + '<label class="fld col3"><span>Ambil dari stok (opsional — HPP auto-link)</span><select id="saleInvPick" data-live="sale-invpick">'+invOpts+'</select></label>'
+    + '<label class="fld col3"><span>Ambil dari stok (opsional — ketik untuk cari, HPP auto-link)</span>'+comboBoxHtml('', e?(e.inventoryId||''):'')+'</label>'
     + '<label class="fld col2"><span>Nama produk</span><input id="saleProduct" type="text" value="'+(e?esc(e.productName):'')+'" required></label>'
     + '<label class="fld"><span>Harga jual per unit</span><input id="salePrice" type="number" min="0" value="'+(e?esc(e.sellPrice):'')+'" required></label>'
     + '<label class="fld"><span>Qty</span><input id="saleQty" type="number" min="1" value="'+(e?esc(e.qty):'1')+'" required></label>'
@@ -1575,6 +1630,24 @@ function onClick(e){
     case 'sb-retry': enterCloud(); break;
     case 'inv-invoice-remove': { invInvoicePending=null; var st_i=document.getElementById('invInvoiceStatus'); if(st_i) st_i.textContent='(invoice akan dihapus saat simpan)'; break; }
     case 'sale-invoice-remove': { saleInvoicePending=null; var st_s=document.getElementById('saleInvoiceStatus'); if(st_s) st_s.textContent='(invoice akan dihapus saat simpan)'; break; }
+    case 'combo-pick': {
+      var cidx=t.getAttribute('data-idx')||''; var cid=t.getAttribute('data-id')||''; var clabel=t.getAttribute('data-label')||'';
+      var hidden=document.getElementById('saleInvPick'+cidx);
+      var searchInput=document.querySelector('.combo-input[data-idx="'+cidx+'"]');
+      var list=document.getElementById('comboList'+cidx);
+      var pn=document.getElementById(cidx===''?'saleProduct':'saleProduct'+cidx);
+      if(cid){
+        if(hidden) hidden.value=cid;
+        if(searchInput) searchInput.value=clabel;
+        var inv=state.inventory.find(function(x){return x.id===cid;});
+        if(pn && inv) pn.value=inv.productName;
+      } else {
+        if(hidden) hidden.value='';
+        if(searchInput) searchInput.value='';
+      }
+      if(list) list.style.display='none';
+      break;
+    }
     case 'view-invoice': {
       var vk=t.getAttribute('data-kind'), vid=t.getAttribute('data-id');
       var arr=(vk==='inv')?state.inventory:state.sales;
@@ -1620,6 +1693,7 @@ function onInput(e){
     var h=document.getElementById('hdBiz');
     if(h) h.innerHTML=esc(el.value)+' · Handphone &amp; Elektronik';
   }
+  else if(k==='combo-search'){ comboFilter(el); }
 }
 
 function onChange(e){
@@ -1908,6 +1982,8 @@ document.addEventListener('click',onClick);
 document.addEventListener('submit',onSubmit);
 document.addEventListener('input',onInput);
 document.addEventListener('change',onChange);
+document.addEventListener('focusin',comboFocus);
+document.addEventListener('click',comboOutside);
 setupModal();
 
 /* ── Import data dari Stock_Barang.xlsx (sekali-jalan, idempotent) ── */
