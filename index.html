@@ -1010,7 +1010,10 @@ function taxView(){
   }
   var yPph=yearRevenue*PPH_FINAL_RATE, yPpn=yearRevenue*PPN_RATE/(1+PPN_RATE);
   var over=yearRevenue>UMKM_THRESHOLD, near=yearRevenue>UMKM_THRESHOLD*0.8;
-  var showPpn=state.settings.isPkp||over;
+  var showPpn=state.settings.isPkp;
+  var yearNet=yearSales.reduce(function(sum,s){return sum+calculateSaleMetrics(s,state.inventory,state.marketplaces).netProfit;},0);
+  var taxTotal=yPph+(showPpn?yPpn:0);
+  var labaSesudah=yearNet-taxTotal;
 
   var yearOpts='';
   for(var k=0;k<5;k++){ var y=new Date().getFullYear()-k; yearOpts+='<option value="'+y+'" '+(y===year?'selected':'')+'>'+y+'</option>'; }
@@ -1052,8 +1055,8 @@ function taxView(){
       + '<td><span id="taxcar-'+m.i+'" class="muted">'+(openM?'\u25BE':'\u25B8')+'</span> '+mName+(chArr.length?' <span class="xs muted">('+chArr.length+' channel)</span>':'')+'</td>'
       + '<td class="num tr">'+formatRupiah(m.rev)+'</td>'
       + '<td class="num tr">'+formatRupiah(m.pph)+'</td>'
-      + '<td class="num tr muted">'+(showPpn?formatRupiah(m.ppn):'—')+'</td></tr>'
-      + '<tr class="tax-detail" id="taxd-'+m.i+'" style="display:'+(openM?'table-row':'none')+'"><td colspan="4" style="background:var(--paper)"><div style="padding:2px 0 6px">'+detail+'</div></td></tr>';
+      + (showPpn?'<td class="num tr muted">'+formatRupiah(m.ppn)+'</td>':'')+'</tr>'
+      + '<tr class="tax-detail" id="taxd-'+m.i+'" style="display:'+(openM?'table-row':'none')+'"><td colspan="'+(showPpn?4:3)+'" style="background:var(--paper)"><div style="padding:2px 0 6px">'+detail+'</div></td></tr>';
   }).join('');
 
   var alertHtml='';
@@ -1068,22 +1071,25 @@ function taxView(){
     +   '</div>'
     +   '<div class="kpis" style="margin-bottom:20px">'
     +     kpi('Omset '+year,formatRupiah(yearRevenue),(yearRevenue/UMKM_THRESHOLD*100).toFixed(1)+'% dari ambang PKP')
+    +     kpi('Laba sebelum pajak',formatRupiah(yearNet),'Total laba bersih '+year,yearNet>=0?'profit':'danger')
     +     kpi('PPh Final 0.5%',formatRupiah(yPph),over?'Sudah melebihi ambang UMKM':'Tarif PP 55/2022',over?'danger':near?'warn':'profit')
-    +     kpi('Estimasi PPN 12%',formatRupiah(showPpn?yPpn:0),showPpn?'PPN keluaran (gross-up dari omset)':'Non-PKP: tidak berlaku')
+    +     (showPpn?kpi('PPN 12%',formatRupiah(yPpn),'PPN keluaran (gross-up dari omset)'):'')
+    +     kpi('Laba setelah pajak',formatRupiah(labaSesudah),showPpn?'Dikurangi PPh Final + PPN':'Dikurangi PPh Final',labaSesudah>=0?'profit':'danger')
     +   '</div>'
     +   alertHtml
     +   '<h3 class="sec-title" style="margin:16px 0 8px">Rincian per Bulan <span class="xs muted" style="text-transform:none;letter-spacing:0">— klik bulan untuk lihat channel</span></h3>'
     +   '<div class="tbl-wrap" style="border:0"><table><thead><tr>'
-    +     '<th>Bulan</th><th class="tr">Omset</th><th class="tr">PPh Final 0.5%</th><th class="tr">PPN 12% (jika PKP)</th>'
+    +     '<th>Bulan</th><th class="tr">Omset</th><th class="tr">PPh Final 0.5%</th>'+(showPpn?'<th class="tr">PPN 12%</th>':'')
     +   '</tr></thead><tbody>'+monthRows
     +     '<tr class="med" style="background:var(--paper)"><td>Total</td>'
     +       '<td class="num tr">'+formatRupiah(yearRevenue)+'</td>'
     +       '<td class="num tr">'+formatRupiah(yPph)+'</td>'
-    +       '<td class="num tr">'+(showPpn?formatRupiah(yPpn):'—')+'</td></tr>'
+    +       (showPpn?'<td class="num tr">'+formatRupiah(yPpn)+'</td>':'')+'</tr>'
     +   '</tbody></table></div>'
     +   '<div class="note" style="margin-top:20px">'
     +     '<p><strong>PPh Final UMKM (PP 55/2022):</strong> 0.5% dari peredaran bruto selama omset tahunan ≤ Rp 4,8 miliar (ada batas waktu: 7 tahun OP, 4 tahun PT).</p>'
     +     '<p><strong>PPN 12% (UU HPP):</strong> berlaku sejak 2025 untuk PKP. Setoran = PPN keluaran − PPN masukan.</p>'
+    +     '<p><strong>Laba setelah pajak</strong> = laba bersih dikurangi PPh Final'+(showPpn?' dan PPN 12%':'')+'. Catatan: PPN sejatinya dipungut dari pembeli; di sini diasumsikan harga jual sudah termasuk PPN.</p>'
     +     '<p>Angka ini estimasi. Verifikasi ke DJP Online / konsultan pajak sebelum lapor SPT.</p>'
     +   '</div>'
     + '</div></div>';
