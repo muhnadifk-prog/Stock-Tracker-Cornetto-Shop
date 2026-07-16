@@ -1266,15 +1266,30 @@ function exportCsvSales(){
   downloadBlob('penjualan_'+todayISO()+'.csv','\ufeff'+toCsv(salesExportRows()),'text/csv;charset=utf-8');
   ioStatusMsg(true,'Penjualan diekspor ke CSV.');
 }
+function downloadTemplate(fname, sheetName, rows, cols){
+  if(typeof XLSX!=='undefined'){
+    var ws=XLSX.utils.json_to_sheet(rows);
+    if(cols) ws['!cols']=cols;
+    var wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, fname+'.xlsx');
+  } else {
+    downloadBlob(fname+'.csv','\ufeff'+toCsv(rows),'text/csv;charset=utf-8');
+  }
+}
 function templateInv(){
-  var rows=[{ 'Tanggal Masuk':todayISO(),'Nama Produk':'Contoh: iPhone 15 128GB Black',Kategori:'Handphone',
-    IMEI:'350123456789012',Supplier:'Distributor XYZ',HPP:12000000,Qty:1,Kondisi:'New / BNIB',Garansi:'Garansi Resmi / TAM',Invoice:'' }];
-  downloadBlob('template_barang_masuk.csv','\ufeff'+toCsv(rows),'text/csv;charset=utf-8');
+  var rows=[
+    { 'Tanggal Masuk':'2026-07-01','Nama Produk':'iPhone 15 128GB Black','Kategori':'Handphone','IMEI':'350123456789012','Supplier':'Distributor XYZ','HPP':12000000,'Qty':1,'Kondisi':'New / BNIB','Garansi':'Garansi Resmi / TAM' },
+    { 'Tanggal Masuk':'2026-07-03','Nama Produk':'Anker PowerBank 20000mAh','Kategori':'Aksesoris HP','IMEI':'','Supplier':'Tokopedia','HPP':250000,'Qty':5,'Kondisi':'New / BNIB','Garansi':'Tanpa Garansi' }
+  ];
+  downloadTemplate('template_barang_masuk','Barang Masuk',rows,[{wch:14},{wch:34},{wch:14},{wch:18},{wch:18},{wch:12},{wch:6},{wch:14},{wch:18}]);
 }
 function templateSales(){
-  var rows=[{ 'Tanggal Keluar':todayISO(),'Nama Produk':'Contoh: iPhone 15 128GB Black',Channel:'Shopee',
-    'Harga Jual':14500000,Qty:1,'Biaya Admin':'',Ongkir:0,Buyer:'Nama pembeli',Invoice:'' }];
-  downloadBlob('template_penjualan.csv','\ufeff'+toCsv(rows),'text/csv;charset=utf-8');
+  var rows=[
+    { 'Tanggal Keluar':'2026-07-05','Nama Produk':'iPhone 15 128GB Black','Channel':'Shopee','Harga Jual':14500000,'Qty':1,'Biaya Admin':'','Ongkir':0,'Buyer':'Budi' },
+    { 'Tanggal Keluar':'2026-07-06','Nama Produk':'Anker PowerBank 20000mAh','Channel':'Tokopedia','Harga Jual':320000,'Qty':2,'Biaya Admin':14400,'Ongkir':0,'Buyer':'Ani' }
+  ];
+  downloadTemplate('template_penjualan','Penjualan',rows,[{wch:14},{wch:34},{wch:14},{wch:12},{wch:6},{wch:14},{wch:10},{wch:16}]);
 }
 function parseDateCell(v){
   if(!v) return todayISO();
@@ -1377,7 +1392,7 @@ function ioView(){
     +   '</div></div>'
     + '<div class="sec"><div class="sec-hd"><h2 class="sec-title">Impor Data</h2></div>'
     +   '<div class="card">'
-    +     '<p class="leadp">Upload file .xlsx / .xls / .csv. Kolom dikenali otomatis (Barang Masuk atau Penjualan). Data baru <strong style="color:var(--ink)">ditambahkan</strong> — data lama tidak terhapus. Unduh template dulu agar formatnya cocok.</p>'
+    +     '<p class="leadp">Upload file .xlsx / .xls / .csv. Kolom dikenali otomatis (Barang Masuk atau Penjualan). Data baru <strong style="color:var(--ink)">ditambahkan</strong> — data lama tidak terhapus. Unduh template (.xlsx) dulu, ganti baris contohnya dengan data kamu, lalu upload.</p>'
     +     '<div class="toolbar" style="margin:12px 0">'
     +       '<button class="btn btn-outline" data-action="tmpl-inv">Template Barang Masuk</button>'
     +       '<button class="btn btn-outline" data-action="tmpl-sales">Template Penjualan</button>'
