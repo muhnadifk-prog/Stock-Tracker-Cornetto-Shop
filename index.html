@@ -165,6 +165,11 @@
   .pg-dots{ padding:0 2px; color:var(--muted); }
   .pg-size{ font-size:12px; color:var(--muted); display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
   .pg-size select{ width:auto; padding:6px 8px; font-size:13px; }
+  .datefilter{ display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap; }
+  .datefilter .dfin{ width:auto; padding:6px 8px; font-size:12px; }
+  .dfsep{ color:var(--muted); }
+  .btn-mini{ padding:6px 10px; font-size:12px; border:1px solid var(--rule); background:#fff; border-radius:7px; cursor:pointer; color:var(--ink); font-family:inherit; white-space:nowrap; }
+  .btn-mini:hover{ background:var(--paper); }
   .sort-mobile{ display:none; }
 
   @media (min-width: 768px){
@@ -389,8 +394,8 @@ var state = {
   conditions: load('stock_conditions', DEFAULT_CONDITIONS.slice()),
   settings: load('stock_settings',{ isPkp:false, businessName:'Toko Nadif' })
 };
-var invFilters = { search:'', category:'all', onlyAvail:false };
-var salesFilters = { search:'', channel:'all', category:'all' };
+var invFilters = { search:'', category:'all', onlyAvail:false, dateFrom:'', dateTo:'' };
+var salesFilters = { search:'', channel:'all', category:'all', dateFrom:'', dateTo:'' };
 var invSort = { key:'date', dir:'desc' };
 var salesSort = { key:'date', dir:'desc' };
 var invPage=1, invPageSize=10, salesPage=1, salesPageSize=10;
@@ -691,9 +696,6 @@ function invExtraItemsHtml(){
 }
 function saleExtraItemsHtml(){
   var h='';
-  var invOpts='<option value="">\u2014 Manual \u2014</option>'+getStock().filter(function(s){return s.remaining>0;}).map(function(s){
-    return '<option value="'+s.id+'">'+esc(s.productName)+' \u2014 sisa '+s.remaining+' \u2014 HPP '+formatRupiah(s.costPrice)+'</option>';
-  }).join('');
   for(var k=2;k<=saleBulkCount;k++){
     h+='<div class="col4" style="border-top:1px dashed var(--rule);padding-top:10px"><span class="xs muted" style="text-transform:uppercase;letter-spacing:.08em">Penjualan #'+k+'</span> <span class="xs muted">(tanggal, channel, buyer &amp; invoice sama \u2014 jadi 1 invoice)</span></div>'
     +'<label class="fld col2"><span>Ambil dari stok (opsional — ketik untuk cari)</span>'+comboBoxHtml(k,'')+'</label>'
@@ -718,6 +720,20 @@ function comboLabelFor(id){
   var i=state.inventory.find(function(x){return x.id===id;});
   return i?i.productName:'';
 }
+function comboClaimed(exceptIdx){
+  var map={}, idxs=[''];
+  for(var k=2;k<=6;k++) idxs.push(String(k));
+  idxs.forEach(function(ix){
+    if(String(ix)===String(exceptIdx||'')) return;
+    var h=document.getElementById('saleInvPick'+ix);
+    if(!h || !h.value) return;
+    var qEl=document.getElementById(ix===''?'saleQty':'saleQty'+ix);
+    var n=Number(qEl?qEl.value:1)||1;
+    if(n<1) n=1;
+    map[h.value]=(map[h.value]||0)+n;
+  });
+  return map;
+}
 function comboBoxHtml(idx, selId){
   return '<div class="combo">'
     + '<input type="text" class="combo-input" data-live="combo-search" data-idx="'+idx+'" placeholder="Ketik nama barang untuk cari… (opsional)" autocomplete="off" value="'+esc(comboLabelFor(selId))+'">'
@@ -727,14 +743,22 @@ function comboBoxHtml(idx, selId){
 }
 function comboRender(idx, query){
   var q=(query||'').trim().toLowerCase();
-  var items=getStock().filter(function(s){ return s.remaining>0; })
+  var claimed=comboClaimed(idx);
+  var matches=getStock().filter(function(s){ return s.remaining>0; })
     .filter(function(s){ return !q || s.productName.toLowerCase().indexOf(q)>-1 || (s.imei||'').toLowerCase().indexOf(q)>-1; });
+  var items=matches.map(function(s){ return { s:s, avail:s.remaining-(claimed[s.id]||0) }; })
+    .filter(function(o){ return o.avail>0; });
   var html='<div class="combo-item combo-manual" data-action="combo-pick" data-idx="'+idx+'" data-id="" data-label="">— Manual (tidak dari stok) —</div>';
-  html+=items.slice(0,60).map(function(s){
-    var label=esc(s.productName)+' — sisa '+s.remaining+' — HPP '+formatRupiah(s.costPrice);
-    return '<div class="combo-item" data-action="combo-pick" data-idx="'+idx+'" data-id="'+s.id+'" data-label="'+label+'"><span>'+esc(s.productName)+'</span><span class="muted xs" style="white-space:nowrap">sisa '+s.remaining+' · '+formatRupiah(s.costPrice)+'</span></div>';
+  html+=items.slice(0,60).map(function(o){
+    var s=o.s;
+    var label=esc(s.productName)+' — sisa '+o.avail+' — HPP '+formatRupiah(s.costPrice);
+    return '<div class="combo-item" data-action="combo-pick" data-idx="'+idx+'" data-id="'+s.id+'" data-label="'+label+'"><span>'+esc(s.productName)+'</span><span class="muted xs" style="white-space:nowrap">sisa '+o.avail+' · '+formatRupiah(s.costPrice)+'</span></div>';
   }).join('');
-  if(!items.length) html+='<div class="combo-item muted" style="cursor:default;justify-content:flex-start">Tidak ada barang cocok</div>';
+  if(!items.length){
+    html+='<div class="combo-item muted" style="cursor:default;justify-content:flex-start">'
+      + (matches.length?'Stok yang cocok sudah dipilih di baris lain':'Tidak ada barang cocok')
+      + '</div>';
+  }
   return html;
 }
 function comboFilter(el){
@@ -789,6 +813,7 @@ function invFormHtml(){
 
 function filteredStock(){
   var rows=getStock()
+    .filter(function(s){ var d=String(s.date||'').slice(0,10); if(invFilters.dateFrom && d<invFilters.dateFrom) return false; if(invFilters.dateTo && d>invFilters.dateTo) return false; return true; })
     .filter(function(s){ return invFilters.category==='all' || s.category===invFilters.category; })
     .filter(function(s){ return !invFilters.onlyAvail || s.remaining>0; })
     .filter(function(s){
@@ -801,6 +826,15 @@ function filteredStock(){
   return applySort(rows, invSort, invSortVal);
 }
 
+function dateFilterHtml(pfx, from, to){
+  return '<span class="datefilter">'
+    + '<input type="date" class="dfin" data-live="'+pfx+'-datefrom" value="'+esc(from||'')+'" title="Dari tanggal">'
+    + '<span class="dfsep">–</span>'
+    + '<input type="date" class="dfin" data-live="'+pfx+'-dateto" value="'+esc(to||'')+'" title="Sampai tanggal">'
+    + '<button type="button" class="btn-mini" data-action="'+pfx+'-date-today">Hari ini</button>'
+    + '<button type="button" class="btn-mini" data-action="'+pfx+'-date-clear" title="Reset tanggal">×</button>'
+    + '</span>';
+}
 function invSortSelect(){
   var opts=[['date:desc','Terbaru'],['date:asc','Terlama'],['productName:asc','Nama A–Z'],['costPrice:desc','HPP tertinggi'],['remaining:desc','Sisa terbanyak'],['soldQty:desc','Terjual terbanyak']];
   var cur=invSort.key+':'+invSort.dir;
@@ -895,6 +929,7 @@ function inventoryView(){
     +     '<select data-live="inv-category"><option value="all">Semua kategori</option>'
     +       state.categories.map(function(c){return '<option '+(invFilters.category===c?'selected':'')+'>'+esc(c)+'</option>';}).join('')
     +     '</select>'
+    +     dateFilterHtml('inv',invFilters.dateFrom,invFilters.dateTo)
     +   '</div></div>'
     +   '<div class="list-summary" id="invSummary">'+invSummaryHtml()+'</div>'
     +   '<div class="tbl-wrap data-wrap"><table style="min-width:1000px"><thead><tr>'
@@ -971,6 +1006,7 @@ function salesFormHtml(){
 
 function filteredSales(){
   var rows=state.sales
+    .filter(function(s){ var d=String(s.date||'').slice(0,10); if(salesFilters.dateFrom && d<salesFilters.dateFrom) return false; if(salesFilters.dateTo && d>salesFilters.dateTo) return false; return true; })
     .filter(function(s){ return salesFilters.channel==='all' || s.channel===salesFilters.channel; })
     .filter(function(s){ return salesFilters.category==='all' || saleCategory(s)===salesFilters.category; })
     .filter(function(s){
@@ -1019,6 +1055,7 @@ function salesView(){
     +     saleSortSelect()
     +     '<select data-live="sale-category-filter">'+catFilterOpts+'</select>'
     +     '<select data-live="sale-channel-filter">'+chanFilterOpts+'</select>'
+    +     dateFilterHtml('sale',salesFilters.dateFrom,salesFilters.dateTo)
     +   '</div></div>'
     +   '<div class="list-summary" id="saleSummary">'+saleSummaryHtml()+'</div>'
     +   '<div class="tbl-wrap data-wrap"><table style="min-width:1200px"><thead><tr>'
@@ -1663,6 +1700,12 @@ function onClick(e){
       invPage=1; render(); break;
     }
     case 'inv-page': invPage=Number(t.getAttribute('data-page'))||1; updateInvTable(); break;
+    case 'inv-date-today': { var td=todayISO(); invFilters.dateFrom=td; invFilters.dateTo=td; invPage=1;
+      var f=document.querySelector('[data-live="inv-datefrom"]'); if(f) f.value=td;
+      var t2=document.querySelector('[data-live="inv-dateto"]'); if(t2) t2.value=td; updateInvTable(); break; }
+    case 'inv-date-clear': { invFilters.dateFrom=''; invFilters.dateTo=''; invPage=1;
+      var f2=document.querySelector('[data-live="inv-datefrom"]'); if(f2) f2.value='';
+      var t3=document.querySelector('[data-live="inv-dateto"]'); if(t3) t3.value=''; updateInvTable(); break; }
     case 'sale-sort': {
       var sk2=t.getAttribute('data-key');
       if(salesSort.key===sk2) salesSort.dir=salesSort.dir==='asc'?'desc':'asc';
@@ -1670,6 +1713,12 @@ function onClick(e){
       salesPage=1; render(); break;
     }
     case 'sale-page': salesPage=Number(t.getAttribute('data-page'))||1; updateSalesTable(); break;
+    case 'sale-date-today': { var td2=todayISO(); salesFilters.dateFrom=td2; salesFilters.dateTo=td2; salesPage=1;
+      var sf=document.querySelector('[data-live="sale-datefrom"]'); if(sf) sf.value=td2;
+      var st2=document.querySelector('[data-live="sale-dateto"]'); if(st2) st2.value=td2; updateSalesTable(); break; }
+    case 'sale-date-clear': { salesFilters.dateFrom=''; salesFilters.dateTo=''; salesPage=1;
+      var sf2=document.querySelector('[data-live="sale-datefrom"]'); if(sf2) sf2.value='';
+      var st3=document.querySelector('[data-live="sale-dateto"]'); if(st3) st3.value=''; updateSalesTable(); break; }
     case 'chart-metric': chartMetric=t.getAttribute('data-val'); render(); break;
     case 'chart-group': chartGroup=t.getAttribute('data-val'); render(); break;
     case 'inv-bulk': {
@@ -1802,9 +1851,13 @@ function onChange(e){
     case 'inv-onlyavail': invFilters.onlyAvail=el.checked; invPage=1; updateInvTable(); break;
     case 'inv-category': invFilters.category=el.value; invPage=1; updateInvTable(); break;
     case 'inv-pagesize': invPageSize=Number(el.value)||10; invPage=1; updateInvTable(); break;
+    case 'inv-datefrom': invFilters.dateFrom=el.value; invPage=1; updateInvTable(); break;
+    case 'inv-dateto': invFilters.dateTo=el.value; invPage=1; updateInvTable(); break;
     case 'sale-channel-filter': salesFilters.channel=el.value; salesPage=1; updateSalesTable(); break;
     case 'sale-category-filter': salesFilters.category=el.value; salesPage=1; updateSalesTable(); break;
     case 'sale-pagesize': salesPageSize=Number(el.value)||10; salesPage=1; updateSalesTable(); break;
+    case 'sale-datefrom': salesFilters.dateFrom=el.value; salesPage=1; updateSalesTable(); break;
+    case 'sale-dateto': salesFilters.dateTo=el.value; salesPage=1; updateSalesTable(); break;
     case 'inv-sort-select': { var isp=el.value.split(':'); invSort={key:isp[0],dir:isp[1]||'desc'}; invPage=1; render(); break; }
     case 'sale-sort-select': { var ssp=el.value.split(':'); salesSort={key:ssp[0],dir:ssp[1]||'desc'}; salesPage=1; render(); break; }
     case 'sale-channel': {
