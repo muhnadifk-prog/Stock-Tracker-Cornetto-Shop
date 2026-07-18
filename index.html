@@ -170,6 +170,20 @@
   .dfsep{ color:var(--muted); }
   .btn-mini{ padding:6px 10px; font-size:12px; border:1px solid var(--rule); background:#fff; border-radius:7px; cursor:pointer; color:var(--ink); font-family:inherit; white-space:nowrap; }
   .btn-mini:hover{ background:var(--paper); }
+  .dfwrap{ position:relative; display:inline-flex; align-items:center; }
+  .dfpreset{ width:auto; padding:6px 8px; font-size:12px; }
+  .dflabel{ display:none; }
+  @supports selector(::-webkit-datetime-edit){
+    .datefilter .dfin::-webkit-datetime-edit{ opacity:0; }
+    .datefilter .dfin:focus::-webkit-datetime-edit{ opacity:1; }
+    .dflabel{ display:block; position:absolute; left:9px; top:50%; transform:translateY(-50%); pointer-events:none; font-size:12px; color:var(--ink); white-space:nowrap; }
+    .dflabel.empty{ color:var(--muted); }
+    .datefilter .dfin:focus ~ .dflabel{ display:none; }
+  }
+  @media (max-width: 767px){
+    .datefilter{ width:100%; }
+    .datefilter .dfpreset{ flex:1 1 100%; width:100%; }
+  }
   .sort-mobile{ display:none; }
 
   @media (min-width: 768px){
@@ -299,7 +313,16 @@ function formatDate(d){
   catch(e){ return String(d); }
 }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
-function todayISO(){ return new Date().toISOString().slice(0,10); }
+function isoDate(d){
+  var m=d.getMonth()+1, dd=d.getDate();
+  return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(dd<10?'0':'')+dd;
+}
+function todayISO(){ return isoDate(new Date()); }
+function dmy(iso){
+  if(!iso) return '';
+  var p=String(iso).slice(0,10).split('-');
+  return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : String(iso);
+}
 function load(key,fb){ try{ var v=localStorage.getItem(key); return v?JSON.parse(v):fb; }catch(e){ return fb; } }
 var __saveErr=null;
 function save(key,val){ try{ localStorage.setItem(key,JSON.stringify(val)); }catch(e){ __saveErr=e; } }
@@ -826,14 +849,53 @@ function filteredStock(){
   return applySort(rows, invSort, invSortVal);
 }
 
+var DATE_PRESETS=[['today','Hari ini'],['yesterday','Kemarin'],['7d','7 hari terakhir'],['30d','30 hari terakhir'],['thismonth','Bulan ini'],['lastmonth','Bulan lalu'],['thisyear','Tahun ini']];
+function datePresetRange(key){
+  var now=new Date(), t=isoDate(now), d;
+  if(key==='today') return {from:t,to:t};
+  if(key==='yesterday'){ d=new Date(now); d.setDate(d.getDate()-1); return {from:isoDate(d),to:isoDate(d)}; }
+  if(key==='7d'){ d=new Date(now); d.setDate(d.getDate()-6); return {from:isoDate(d),to:t}; }
+  if(key==='30d'){ d=new Date(now); d.setDate(d.getDate()-29); return {from:isoDate(d),to:t}; }
+  if(key==='thismonth') return {from:isoDate(new Date(now.getFullYear(),now.getMonth(),1)),to:t};
+  if(key==='lastmonth') return {from:isoDate(new Date(now.getFullYear(),now.getMonth()-1,1)),to:isoDate(new Date(now.getFullYear(),now.getMonth(),0))};
+  if(key==='thisyear') return {from:isoDate(new Date(now.getFullYear(),0,1)),to:t};
+  return {from:'',to:''};
+}
+function activePreset(from,to){
+  if(!from && !to) return '';
+  for(var i=0;i<DATE_PRESETS.length;i++){
+    var r=datePresetRange(DATE_PRESETS[i][0]);
+    if(r.from===from && r.to===to) return DATE_PRESETS[i][0];
+  }
+  return '';
+}
+function dfInput(pfx,which,val,title){
+  return '<span class="dfwrap">'
+    + '<input type="date" class="dfin" data-live="'+pfx+'-date'+which+'" value="'+esc(val||'')+'" title="'+title+'">'
+    + '<span class="dflabel'+(val?'':' empty')+'" id="dfl-'+pfx+'-'+which+'">'+(val?dmy(val):'dd/mm/yyyy')+'</span>'
+    + '</span>';
+}
 function dateFilterHtml(pfx, from, to){
+  var act=activePreset(from,to);
+  var opts='<option value="">Pilih cepat…</option>'
+    + DATE_PRESETS.map(function(o){ return '<option value="'+o[0]+'" '+(act===o[0]?'selected':'')+'>'+esc(o[1])+'</option>'; }).join('');
   return '<span class="datefilter">'
-    + '<input type="date" class="dfin" data-live="'+pfx+'-datefrom" value="'+esc(from||'')+'" title="Dari tanggal">'
+    + dfInput(pfx,'from',from,'Dari tanggal')
     + '<span class="dfsep">–</span>'
-    + '<input type="date" class="dfin" data-live="'+pfx+'-dateto" value="'+esc(to||'')+'" title="Sampai tanggal">'
+    + dfInput(pfx,'to',to,'Sampai tanggal')
     + '<button type="button" class="btn-mini" data-action="'+pfx+'-date-today">Hari ini</button>'
+    + '<select class="dfpreset" data-live="'+pfx+'-datepreset">'+opts+'</select>'
     + '<button type="button" class="btn-mini" data-action="'+pfx+'-date-clear" title="Reset tanggal">×</button>'
     + '</span>';
+}
+function syncDateUI(pfx,from,to){
+  var lf=document.getElementById('dfl-'+pfx+'-from');
+  if(lf){ lf.textContent=from?dmy(from):'dd/mm/yyyy'; lf.className='dflabel'+(from?'':' empty'); }
+  var lt=document.getElementById('dfl-'+pfx+'-to');
+  if(lt){ lt.textContent=to?dmy(to):'dd/mm/yyyy'; lt.className='dflabel'+(to?'':' empty'); }
+  var i1=document.querySelector('[data-live="'+pfx+'-datefrom"]'); if(i1 && i1.value!==(from||'')) i1.value=from||'';
+  var i2=document.querySelector('[data-live="'+pfx+'-dateto"]'); if(i2 && i2.value!==(to||'')) i2.value=to||'';
+  var sel=document.querySelector('[data-live="'+pfx+'-datepreset"]'); if(sel) sel.value=activePreset(from,to);
 }
 function invSortSelect(){
   var opts=[['date:desc','Terbaru'],['date:asc','Terlama'],['productName:asc','Nama A–Z'],['costPrice:desc','HPP tertinggi'],['remaining:desc','Sisa terbanyak'],['soldQty:desc','Terjual terbanyak']];
@@ -1701,11 +1763,9 @@ function onClick(e){
     }
     case 'inv-page': invPage=Number(t.getAttribute('data-page'))||1; updateInvTable(); break;
     case 'inv-date-today': { var td=todayISO(); invFilters.dateFrom=td; invFilters.dateTo=td; invPage=1;
-      var f=document.querySelector('[data-live="inv-datefrom"]'); if(f) f.value=td;
-      var t2=document.querySelector('[data-live="inv-dateto"]'); if(t2) t2.value=td; updateInvTable(); break; }
+      syncDateUI('inv',td,td); updateInvTable(); break; }
     case 'inv-date-clear': { invFilters.dateFrom=''; invFilters.dateTo=''; invPage=1;
-      var f2=document.querySelector('[data-live="inv-datefrom"]'); if(f2) f2.value='';
-      var t3=document.querySelector('[data-live="inv-dateto"]'); if(t3) t3.value=''; updateInvTable(); break; }
+      syncDateUI('inv','',''); updateInvTable(); break; }
     case 'sale-sort': {
       var sk2=t.getAttribute('data-key');
       if(salesSort.key===sk2) salesSort.dir=salesSort.dir==='asc'?'desc':'asc';
@@ -1714,11 +1774,9 @@ function onClick(e){
     }
     case 'sale-page': salesPage=Number(t.getAttribute('data-page'))||1; updateSalesTable(); break;
     case 'sale-date-today': { var td2=todayISO(); salesFilters.dateFrom=td2; salesFilters.dateTo=td2; salesPage=1;
-      var sf=document.querySelector('[data-live="sale-datefrom"]'); if(sf) sf.value=td2;
-      var st2=document.querySelector('[data-live="sale-dateto"]'); if(st2) st2.value=td2; updateSalesTable(); break; }
+      syncDateUI('sale',td2,td2); updateSalesTable(); break; }
     case 'sale-date-clear': { salesFilters.dateFrom=''; salesFilters.dateTo=''; salesPage=1;
-      var sf2=document.querySelector('[data-live="sale-datefrom"]'); if(sf2) sf2.value='';
-      var st3=document.querySelector('[data-live="sale-dateto"]'); if(st3) st3.value=''; updateSalesTable(); break; }
+      syncDateUI('sale','',''); updateSalesTable(); break; }
     case 'chart-metric': chartMetric=t.getAttribute('data-val'); render(); break;
     case 'chart-group': chartGroup=t.getAttribute('data-val'); render(); break;
     case 'inv-bulk': {
@@ -1851,13 +1909,17 @@ function onChange(e){
     case 'inv-onlyavail': invFilters.onlyAvail=el.checked; invPage=1; updateInvTable(); break;
     case 'inv-category': invFilters.category=el.value; invPage=1; updateInvTable(); break;
     case 'inv-pagesize': invPageSize=Number(el.value)||10; invPage=1; updateInvTable(); break;
-    case 'inv-datefrom': invFilters.dateFrom=el.value; invPage=1; updateInvTable(); break;
-    case 'inv-dateto': invFilters.dateTo=el.value; invPage=1; updateInvTable(); break;
+    case 'inv-datefrom': invFilters.dateFrom=el.value; invPage=1; syncDateUI('inv',invFilters.dateFrom,invFilters.dateTo); updateInvTable(); break;
+    case 'inv-dateto': invFilters.dateTo=el.value; invPage=1; syncDateUI('inv',invFilters.dateFrom,invFilters.dateTo); updateInvTable(); break;
+    case 'inv-datepreset': { var rp=datePresetRange(el.value); invFilters.dateFrom=rp.from; invFilters.dateTo=rp.to; invPage=1;
+      syncDateUI('inv',rp.from,rp.to); updateInvTable(); break; }
     case 'sale-channel-filter': salesFilters.channel=el.value; salesPage=1; updateSalesTable(); break;
     case 'sale-category-filter': salesFilters.category=el.value; salesPage=1; updateSalesTable(); break;
     case 'sale-pagesize': salesPageSize=Number(el.value)||10; salesPage=1; updateSalesTable(); break;
-    case 'sale-datefrom': salesFilters.dateFrom=el.value; salesPage=1; updateSalesTable(); break;
-    case 'sale-dateto': salesFilters.dateTo=el.value; salesPage=1; updateSalesTable(); break;
+    case 'sale-datefrom': salesFilters.dateFrom=el.value; salesPage=1; syncDateUI('sale',salesFilters.dateFrom,salesFilters.dateTo); updateSalesTable(); break;
+    case 'sale-dateto': salesFilters.dateTo=el.value; salesPage=1; syncDateUI('sale',salesFilters.dateFrom,salesFilters.dateTo); updateSalesTable(); break;
+    case 'sale-datepreset': { var rp2=datePresetRange(el.value); salesFilters.dateFrom=rp2.from; salesFilters.dateTo=rp2.to; salesPage=1;
+      syncDateUI('sale',rp2.from,rp2.to); updateSalesTable(); break; }
     case 'inv-sort-select': { var isp=el.value.split(':'); invSort={key:isp[0],dir:isp[1]||'desc'}; invPage=1; render(); break; }
     case 'sale-sort-select': { var ssp=el.value.split(':'); salesSort={key:ssp[0],dir:ssp[1]||'desc'}; salesPage=1; render(); break; }
     case 'sale-channel': {
