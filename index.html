@@ -1019,7 +1019,8 @@ function invSummaryHtml(){
     buyTotal+=(Number(s.costPrice)||0)*(Number(s.qty)||0);
     valRemain+=Number(s.value)||0;
   });
-  return 'Total '+rows.length+' produk · <span class="num med">'+qty+'</span> unit masuk · <span class="num">'+sold+'</span> terjual · <span class="num med">'+remain+'</span> sisa · nilai beli <span class="num">'+formatRupiah(buyTotal)+'</span> · nilai sisa <span class="num">'+formatRupiah(valRemain)+'</span>';
+  var avgCost = qty>0 ? buyTotal/qty : 0;
+  return 'Total '+rows.length+' produk · <span class="num med">'+qty+'</span> unit masuk · <span class="num">'+sold+'</span> terjual · <span class="num med">'+remain+'</span> sisa · nilai beli <span class="num">'+formatRupiah(buyTotal)+'</span> · nilai sisa <span class="num">'+formatRupiah(valRemain)+'</span> · <span class="med">rata-rata HPP</span> <span class="num med">'+formatRupiah(avgCost)+'</span>';
 }
 function updateInvTable(){
   var tb=document.getElementById('invTbody'); if(tb) tb.innerHTML=invRowsHtml();
