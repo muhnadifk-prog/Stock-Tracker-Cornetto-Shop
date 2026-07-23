@@ -170,6 +170,7 @@
   .dfsep{ color:var(--muted); }
   .btn-mini{ padding:6px 10px; font-size:12px; border:1px solid var(--rule); background:#fff; border-radius:7px; cursor:pointer; color:var(--ink); font-family:inherit; white-space:nowrap; }
   .btn-mini:hover{ background:var(--paper); }
+  .calc-hint{ font-size:11.5px; color:var(--muted); margin-top:4px; min-height:15px; line-height:1.3; }
   .dfwrap{ position:relative; display:inline-flex; align-items:center; }
   .dfpreset{ width:auto; padding:6px 8px; font-size:12px; }
   .dflabel{ display:none; }
@@ -337,6 +338,104 @@ function localPersist(){
 }
 function persist(){ localPersist(); if(cloudMode) scheduleCloudSave(); }
 function val(id){ var el=document.getElementById(id); return el ? el.value.trim() : ''; }
+
+/* ═══════════════════════ MINI CALCULATOR ═══════════════════════ */
+/* Parser aman (tanpa eval): mendukung + - * / kurung, pemisah ribuan,
+   koma desimal, dan akhiran jt/juta/rb/ribu/k. */
+function calcNormNum(raw){
+  if(!raw) return null;
+  var s=String(raw);
+  if(s.indexOf(',')>-1){ s=s.replace(/\./g,'').replace(',','.'); }
+  else if(s.indexOf('.')>-1 && /^\d{1,3}(\.\d{3})+$/.test(s)){ s=s.replace(/\./g,''); }
+  var v=parseFloat(s);
+  return isFinite(v)?v:null;
+}
+function calcTokens(str){
+  var s=String(str), i=0, n=s.length, out=[];
+  while(i<n){
+    var c=s.charAt(i);
+    if(c===' '){ i++; continue; }
+    if('+-*/()'.indexOf(c)>-1){ out.push({t:'op',v:c}); i++; continue; }
+    if(c==='x'||c==='X'){ out.push({t:'op',v:'*'}); i++; continue; }
+    if(/[0-9.,]/.test(c)){
+      var j=i;
+      while(j<n && /[0-9.,]/.test(s.charAt(j))) j++;
+      var num=calcNormNum(s.slice(i,j));
+      if(num===null) return null;
+      var m=/^(juta|jt|ribu|rb|k)/i.exec(s.slice(j));
+      if(m){
+        var suf=m[1].toLowerCase();
+        if(suf==='jt'||suf==='juta') num*=1000000; else num*=1000;
+        j+=m[1].length;
+      }
+      out.push({t:'num',v:num}); i=j; continue;
+    }
+    return null;
+  }
+  return out;
+}
+function calcParse(tk){
+  var pos=0;
+  function peek(){ return tk[pos]; }
+  function factor(){
+    var c=peek(); if(!c) return null;
+    if(c.t==='op' && c.v==='-'){ pos++; var nv=factor(); return nv===null?null:-nv; }
+    if(c.t==='op' && c.v==='+'){ pos++; return factor(); }
+    if(c.t==='num'){ pos++; return c.v; }
+    if(c.t==='op' && c.v==='('){
+      pos++; var iv=expr(); if(iv===null) return null;
+      var cl=peek(); if(!cl || cl.v!==')') return null;
+      pos++; return iv;
+    }
+    return null;
+  }
+  function term(){
+    var v=factor(); if(v===null) return null;
+    while(peek() && peek().t==='op' && (peek().v==='*'||peek().v==='/')){
+      var op=tk[pos++].v; var r=factor(); if(r===null) return null;
+      if(op==='/'){ if(r===0) return null; v=v/r; } else { v=v*r; }
+    }
+    return v;
+  }
+  function expr(){
+    var v=term(); if(v===null) return null;
+    while(peek() && peek().t==='op' && (peek().v==='+'||peek().v==='-')){
+      var op=tk[pos++].v; var r=term(); if(r===null) return null;
+      v = (op==='+') ? v+r : v-r;
+    }
+    return v;
+  }
+  var res=expr();
+  if(res===null || pos!==tk.length) return null;
+  return res;
+}
+function evalExpr(str){
+  if(str===null || str===undefined) return null;
+  var s=String(str).trim();
+  if(!s) return null;
+  var tk=calcTokens(s);
+  if(!tk || !tk.length) return null;
+  var v=calcParse(tk);
+  return (v===null || !isFinite(v)) ? null : v;
+}
+function isPlainNumber(s){ return /^\d+$/.test(String(s).trim()); }
+function calcFieldHtml(idx,label,value,required){
+  return '<label class="fld"><span>'+label+'</span>'
+    + '<input id="invCost'+idx+'" type="text" inputmode="text" data-live="hpp-calc" data-idx="'+idx+'"'
+    +   ' placeholder="11250000 atau 11250000+153050" value="'+esc(value||'')+'"'+(required?' required':'')+'>'
+    + '<div class="calc-hint" id="calcHint'+idx+'"></div>'
+    + '</label>';
+}
+function calcHintUpdate(el){
+  var idx=el.getAttribute('data-idx')||'';
+  var box=document.getElementById('calcHint'+idx); if(!box) return;
+  var raw=el.value.trim();
+  if(!raw || isPlainNumber(raw)){ box.innerHTML=''; return; }
+  var v=evalExpr(raw);
+  if(v===null){ box.innerHTML='<span class="danger">rumus belum valid</span>'; return; }
+  box.innerHTML='<span class="profit med">= '+formatRupiah(Math.round(v))+'</span> '
+    + '<button type="button" class="linkbtn" data-action="hpp-apply" data-idx="'+idx+'">pakai</button>';
+}
 
 /* ═══════════════════════ CALCULATIONS ═══════════════════════ */
 
@@ -712,7 +811,7 @@ function invExtraItemsHtml(){
     h+='<div class="col4" style="border-top:1px dashed var(--rule);padding-top:10px"><span class="xs muted" style="text-transform:uppercase;letter-spacing:.08em">Barang #'+k+'</span> <span class="xs muted">(tanggal, kategori, supplier, kondisi &amp; garansi mengikuti isian di atas)</span></div>'
     +'<label class="fld col2"><span>Nama produk #'+k+'</span><input id="invProduct'+k+'" type="text"></label>'
     +'<label class="fld"><span>IMEI / SN</span><input id="invImei'+k+'" type="text"></label>'
-    +'<label class="fld"><span>HPP per unit (Rp)</span><input id="invCost'+k+'" type="number" min="0"></label>'
+    +calcFieldHtml(k,'HPP per unit (Rp)','',false)
     +'<label class="fld"><span>Qty</span><input id="invQty'+k+'" type="number" min="1" value="1"></label>';
   }
   return h;
@@ -819,7 +918,7 @@ function invFormHtml(){
     + '<label class="fld"><span>Kategori</span><select id="invCategory">'+catOpts+'</select></label>'
     + '<label class="fld"><span>IMEI / SN (opsional)</span><input id="invImei" type="text" value="'+v('imei')+'"></label>'
     + '<label class="fld"><span>Supplier</span><input id="invSupplier" type="text" value="'+v('supplier')+'"></label>'
-    + '<label class="fld"><span>HPP per unit (Rp)</span><input id="invCost" type="number" min="0" value="'+(e?esc(e.costPrice):'')+'" required></label>'
+    + calcFieldHtml('','HPP per unit (Rp)',(e?e.costPrice:''),true)
     + '<label class="fld"><span>Qty</span><input id="invQty" type="number" min="1" value="'+(e?esc(e.qty):'1')+'" required></label>'
     + '<label class="fld"><span>Kondisi</span><select id="invCondition">'+condOpts+'</select></label>'
     + '<label class="fld"><span>Garansi</span><select id="invWarranty">'+warOpts+'</select></label>'
@@ -1596,10 +1695,12 @@ function render(){
 function submitInv(){
   var productName=val('invProduct'), cost=val('invCost');
   if(!productName || cost==='') return;
+  var costNum=evalExpr(cost);
+  if(costNum===null || costNum<0){ uiAlert('HPP tidak valid. Isi angka, atau rumus seperti 11250000+153050.'); return; }
   var prev = editingInvId ? state.inventory.find(function(i){return i.id===editingInvId;}) : null;
   var invoice = (invInvoicePending!==undefined) ? invInvoicePending : (prev?(prev.invoice||null):null);
   var item={ date:val('invDate'), productName:productName, category:val('invCategory'), imei:val('invImei'),
-    supplier:val('invSupplier'), costPrice:Number(cost), qty:Number(val('invQty'))||1,
+    supplier:val('invSupplier'), costPrice:Math.round(costNum), qty:Number(val('invQty'))||1,
     condition:val('invCondition'), warranty:val('invWarranty'), invoice:invoice, notes:(prev?(prev.notes||''):'') };
   if(editingInvId){
     state.inventory=state.inventory.map(function(i){ return i.id===editingInvId ? Object.assign({},item,{id:editingInvId}) : i; });
@@ -1609,8 +1710,10 @@ function submitInv(){
     for(var k=2;k<=invBulkCount;k++){
       var nm=val('invProduct'+k), cs=val('invCost'+k);
       if(!nm || cs==='') continue;
+      var csNum=evalExpr(cs);
+      if(csNum===null || csNum<0) continue;
       state.inventory.unshift({ id:uid(), date:item.date, productName:nm, category:item.category, imei:val('invImei'+k),
-        supplier:item.supplier, costPrice:Number(cs), qty:Number(val('invQty'+k))||1,
+        supplier:item.supplier, costPrice:Math.round(csNum), qty:Number(val('invQty'+k))||1,
         condition:item.condition, warranty:item.warranty, invoice:null, notes:'' });
     }
     invBulkCount=1;
@@ -1835,6 +1938,15 @@ function onClick(e){
     case 'sb-sync': cloudSyncNow(); break;
     case 'sb-signout': cloudSignOut(); break;
     case 'sb-retry': enterCloud(); break;
+    case 'hpp-apply': {
+      var hidx=t.getAttribute('data-idx')||'';
+      var inp=document.getElementById('invCost'+hidx);
+      if(inp){
+        var hv=evalExpr(inp.value);
+        if(hv!==null && hv>=0){ inp.value=String(Math.round(hv)); calcHintUpdate(inp); }
+      }
+      break;
+    }
     case 'inv-invoice-remove': { invInvoicePending=null; var st_i=document.getElementById('invInvoiceStatus'); if(st_i) st_i.textContent='(invoice akan dihapus saat simpan)'; break; }
     case 'sale-invoice-remove': { saleInvoicePending=null; var st_s=document.getElementById('saleInvoiceStatus'); if(st_s) st_s.textContent='(invoice akan dihapus saat simpan)'; break; }
     case 'combo-pick': {
@@ -1901,6 +2013,7 @@ function onInput(e){
     if(h) h.innerHTML=esc(el.value)+' · Handphone &amp; Elektronik';
   }
   else if(k==='combo-search'){ comboFilter(el); }
+  else if(k==='hpp-calc'){ calcHintUpdate(el); }
 }
 
 function onChange(e){
